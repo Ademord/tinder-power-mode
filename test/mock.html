@@ -1,0 +1,147 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>mock tinder</title>
+<style>
+  html,body{margin:0;height:100%;font-family:system-ui}
+  .App__body{display:flex;height:100vh}
+  aside{width:375px;background:#eee;flex-shrink:0}
+  main{flex:1 1 0%;position:relative;border-left:1px solid #ddd;height:100%;overflow:hidden}
+  .Hidden{position:absolute;clip:rect(0 0 0 0);width:1px;height:1px;overflow:hidden}
+  :root{--recs-card-height:500px;--recs-card-width:320px} /* Tinder's own card size variables */
+  [role="region"],#profileWrap{position:relative;height:60em !important;max-width:30em !important;margin:0 auto;width:100%} /* !important like a Stylish sheet */
+  #profileWrap{background:#fff}
+  .recsCardboard__cards{position:relative;height:100%}
+  [data-keyboard-gamepad]{position:absolute;inset:0;background:#000;border-radius:8px}
+  [data-keyboard-gamepad][aria-hidden="true"]{visibility:hidden}
+  .tablist{display:flex;gap:2px;padding:8px}
+  .tab-button{flex:1;height:8px;background:#666;border:0}
+  .tab-button[aria-selected="true"]{background:#fff}
+  .navbtn{position:absolute;top:50%;opacity:0;width:24px;height:24px}
+  .navbtn.next{right:0}
+  .gamepad{display:flex;gap:16px;justify-content:center;position:absolute;bottom:-40px;left:0;right:0}
+  .gamepad-button{width:56px;height:56px;border-radius:50%}
+  .recsToolbar{position:absolute;bottom:0;left:0;right:0;text-align:center;padding:8px;background:#fafafa}
+  .info{position:absolute;bottom:0;left:0;right:0;height:76px;background:#000;color:#fff;text-align:left}
+</style></head>
+<body>
+<div class="App__body">
+  <aside id="sidebar"><nav>SIDEBAR / matches / messages <input id="search" placeholder="search"></nav></aside>
+  <main id="main-content" class="H(100%) Ov(h) Pos(r) Bgc($c-ds-background-secondary) Z(1) Fx($flx1) BdStart Bdc($c-ds-divider-primary)">
+    <div class="Pos(r) Expand H(--recs-card-height)--ml Maw(--recs-card-width)--ml Mt(a)" aria-live="polite" role="region" aria-label="Card stack">
+      <div class="recsCardboard__cardsContainer H(100%) Pos(r) Z(1)">
+        <div class="recsCardboard__cards Expand Animdur($fast) Animtf(eio) Pos(r) CenterAlign" id="cards"></div>
+        <div class="Pos(a) B(0) Iso(i) W(100%) Start(0) End(0) TranslateY(55%)">
+          <div class="gamepad Ai(c) D(f) Jc(sb) Pos(r) Maw(--recs-card-width)--m Mx(a) Pe(n)">
+            <div class="gamepad-button-wrapper Mx(a) Fxs(0) Sq(48px)"><button type="button" class="button gamepad-button" draggable="false"><span class="Pos(r) Z(1) Expand"><span class="gamepad-icon-wrapper"></span><span class="Hidden">Rewind</span></span></button></div>
+            <div class="gamepad-button-wrapper Mx(a) Fxs(0) Sq(64px)"><button type="button" class="button gamepad-button" draggable="false"><span class="Pos(r) Z(1) Expand"><span class="gamepad-icon-wrapper"></span><span class="Hidden">Nope</span></span></button></div>
+            <div class="gamepad-button-wrapper Mx(a) Fxs(0) Sq(48px)"><div class="Expand Prs(1000px)"><div class="Pos(r) Expand"><div class="Expand Bdrs(50%)"><button type="button" class="button gamepad-button" draggable="false"><span class="Pos(r) Z(1) Expand"><span class="gamepad-icon-wrapper"></span><span class="Hidden">Super Like</span></span></button></div><span class="Bfv(h)" aria-label="5 remaining" role="img">5</span></div></div></div>
+            <div class="gamepad-button-wrapper Mx(a) Fxs(0) Sq(64px)"><button type="button" class="button gamepad-button" draggable="false"><span class="Pos(r) Z(1) Expand"><span class="gamepad-icon-wrapper"></span><span class="Hidden">Like</span></span></button></div>
+            <div class="gamepad-button-wrapper Mx(a) Fxs(0) Sq(48px)"><div class="Expand"><button class="button gamepad-button" draggable="false" type="button"><span class="Pos(r) Z(1) Expand CenterAlign"><span class="Hidden">Boost</span></span></button></div><span aria-label="0 remaining" role="img">0</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="recsToolbar W(100%) Ov(h) CenterAlign recsToolbar--open">
+      <button type="button"><span>Hide</span><span class="Hidden">Keyboard Shortcut</span></button>
+      <section aria-label="Keyboard Shortcut"><ul class="recsToolbar__tips__inner">
+        <li id="tip-Left" class="recsToolbar__tip"><span aria-hidden="true">Nope</span><span class="Hidden">Press Left to Nope</span></li>
+        <li id="tip-Right" class="recsToolbar__tip"><span aria-hidden="true">Like</span><span class="Hidden">Press Right to Like</span></li>
+        <li id="tip-Up" class="recsToolbar__tip"><span aria-hidden="true">Open Profile</span><span class="Hidden">Press Up to Open Profile</span></li>
+        <li id="tip-Down" class="recsToolbar__tip"><span aria-hidden="true">Close Profile</span><span class="Hidden">Press Down to Close Profile</span></li>
+        <li id="tip-Enter" class="recsToolbar__tip"><span aria-hidden="true">Super Like</span><span class="Hidden">Press Enter to Super Like</span></li>
+        <li id="tip-Space" class="recsToolbar__tip"><span aria-hidden="true">Next Photo</span><span class="Hidden">Press Space to Next Photo</span></li>
+      </ul></section>
+    </div>
+  </main>
+</div>
+<script>
+  // ---- fake Tinder: records what Tinder itself would have done ----
+  window.__native = [];
+  window.__clicks = [];
+  const NATIVE = { ArrowLeft: 'nope', ArrowRight: 'like', ArrowUp: 'open-profile', ArrowDown: 'close-profile', Enter: 'superlike', ' ': 'next-photo', Escape: 'escape' };
+  document.addEventListener('keydown', e => { if (NATIVE[e.key]) window.__native.push(NATIVE[e.key]); });
+
+  function makeCard(name, age, photos, active, extraStyle) {
+    const card = document.createElement('div');
+    card.setAttribute('data-keyboard-gamepad', 'true');
+    card.setAttribute('aria-hidden', active ? 'false' : 'true');
+    if (!active) card.setAttribute('inert', '');
+    card.className = 'Tcha(n) Bgc(#000) Ov(h) W(100%) StretchedBox Bdrs(8px)';
+    card.setAttribute('draggable', 'false');
+    if (extraStyle) card.style.cssText = extraStyle;
+    const tabs = Array.from({ length: photos }, (_, i) => `<button class="Py(10.5px) W(100%) Mx(2px) Cur(p) tab-button" aria-label="Photo ${i + 1}" aria-controls="carousel-item-${i}" type="button" role="tab" tabindex="${i ? -1 : 0}" aria-selected="${i === 0}"><span></span></button>`).join('');
+    const slides = Array.from({ length: photos }, (_, i) => `<div class="keen-slider__slide" aria-hidden="true" id="carousel-item-${i}" role="tabpanel"></div>`).join('');
+    card.innerHTML = `
+      <div class="Pos(r)" style="height: calc(100% - 75px);">
+        <section class="Expand D(f) Pos(r) tappable-view Cur(p)" aria-label="${name}'s photos" aria-roledescription="carousel">
+          <div class="tablist" aria-hidden="true" aria-label="Photos" role="tablist">${tabs}</div>
+          <div class="Expand Pos(a) D(f) Ov(h) Us(n) keen-slider" dir="ltr" aria-live="off">${slides}</div>
+          <button class="navbtn prev" aria-label="Previous Photo" disabled="" type="button"></button>
+          <button class="navbtn next" aria-label="Next Photo" type="button"></button>
+        </section>
+      </div>
+      <div class="info H(76px) Pos(r)">
+        <button class="Pos(a) D(f) Jc(sb) focus-button-style" tabindex="0" role="button" style="position:absolute;inset:0;width:100%;background:transparent;border:0;color:#fff;text-align:left">
+          <div><span class="Typs(display-1-strong)" itemprop="name">${name}</span> <span class="As(b)" itemprop="age">${age}</span>
+            <div class="P(0) focus-button-style"><span class="Hidden">Open Profile</span></div>
+          </div>
+        </button>
+      </div>`;
+    // keen-slider-ish behaviour
+    const tabEls = Array.from(card.querySelectorAll('[role="tab"]'));
+    const prev = card.querySelector('[aria-label="Previous Photo"]'), next = card.querySelector('[aria-label="Next Photo"]');
+    const select = i => {
+      tabEls.forEach((t, j) => { t.setAttribute('aria-selected', String(i === j)); t.tabIndex = i === j ? 0 : -1; });
+      prev.disabled = i === 0; next.disabled = i === tabEls.length - 1;
+    };
+    const cur = () => tabEls.findIndex(t => t.getAttribute('aria-selected') === 'true');
+    tabEls.forEach((t, i) => t.addEventListener('click', () => { window.__clicks.push('Photo ' + (i + 1)); select(i); }));
+    prev.addEventListener('click', () => { window.__clicks.push('Previous Photo'); select(cur() - 1); });
+    next.addEventListener('click', () => { window.__clicks.push('Next Photo'); select(cur() + 1); });
+    card.querySelector('[role="button"]').addEventListener('click', () => { window.__clicks.push('Open Profile'); openProfileView(name, age, photos); });
+    return card;
+  }
+
+  // Tinder's expanded profile (from a live DOM snapshot): a DIFFERENT container with the same size classes but no role/aria-label,
+  // an h1[aria-label="Name 32 years"], its own carousel + tablist, its own Nope/Super Like/Like gamepad, closed by
+  // div[role="button"][data-testid="profileBackButton"] > span.Hidden "Back". The card stack is hidden while it is open.
+  function openProfileView(name, age, photos) {
+    if (document.querySelector('.profileContent')) return;
+    const region = document.querySelector('[aria-label="Card stack"]');
+    region.style.display = 'none';
+    const wrap = document.createElement('div');
+    wrap.className = 'Pos(r) D(f) Ai(c) Fxd(c) Mt(a) Expand H(--recs-card-height)--ml Maw(--recs-card-width)--ml';
+    wrap.id = 'profileWrap';
+    const tabs = Array.from({ length: photos }, (_, i) => `<button class="tab-button" aria-label="Photo ${i + 1}" type="button" role="tab" tabindex="${i ? -1 : 0}" aria-selected="${i === 0}"><span></span></button>`).join('');
+    wrap.innerHTML = `<div class="profileContent">
+      <div class="D(f) Ai(c) M(16px)"><h1 aria-label="${name} ${age} years"><span class="Pend(8px)">${name}</span><span>${age}</span></h1>
+        <div class="Bdrs(50%) focus-button-style" tabindex="0" role="button" data-testid="profileBackButton"><span class="Hidden">Back</span></div></div>
+      <div class="profileCard__card"><section class="Expand D(f) Pos(r) tappable-view" aria-label="${name}'s photos" aria-roledescription="carousel">
+        <div class="tablist" aria-hidden="true" aria-label="Photos" role="tablist">${tabs}</div>
+        <div class="profileCard__slider Pos(a) Expand keen-slider"></div>
+        <button class="navbtn prev" aria-label="Previous Photo" disabled="" type="button"></button>
+        <button class="navbtn next" aria-label="Next Photo" type="button"></button>
+      </section></div>
+      <div class="pgamepad"><button type="button" class="gamepad-button"><span class="Hidden">Nope</span></button><button type="button" class="gamepad-button"><span class="Hidden">Super Like</span></button><button type="button" class="gamepad-button"><span class="Hidden">Like</span></button></div>
+    </div>`;
+    const tabEls = Array.from(wrap.querySelectorAll('[role="tab"]'));
+    const prev = wrap.querySelector('.prev'), next = wrap.querySelector('.next');
+    const select = i => { tabEls.forEach((t, j) => t.setAttribute('aria-selected', String(i === j))); prev.disabled = i === 0; next.disabled = i === tabEls.length - 1; };
+    const cur = () => tabEls.findIndex(t => t.getAttribute('aria-selected') === 'true');
+    tabEls.forEach((t, i) => t.addEventListener('click', () => { window.__clicks.push('P:Photo ' + (i + 1)); select(i); }));
+    prev.addEventListener('click', () => { window.__clicks.push('P:Previous Photo'); select(cur() - 1); });
+    next.addEventListener('click', () => { window.__clicks.push('P:Next Photo'); select(cur() + 1); });
+    wrap.querySelectorAll('.gamepad-button').forEach(b => b.addEventListener('click', () => { window.__clicks.push('P:' + b.querySelector('.Hidden').textContent); closeProfileView(); }));
+    wrap.querySelector('[data-testid="profileBackButton"]').addEventListener('click', () => { window.__clicks.push('Back'); closeProfileView(); });
+    region.parentElement.insertBefore(wrap, region);
+  }
+  function closeProfileView() {
+    const w = document.getElementById('profileWrap'); if (w) w.remove();
+    document.querySelector('[aria-label="Card stack"]').style.display = '';
+  }
+  const cards = document.getElementById('cards');
+  cards.appendChild(makeCard('Nova', 27, 6, false));
+  cards.appendChild(makeCard('Milo', 31, 9, true));
+  cards.appendChild(makeCard('Theo', 29, 6, false, 'transform: translate3d(-2284px, 0px, 0px) rotate(-30deg)'));
+  document.querySelectorAll('.gamepad-button').forEach(b => b.addEventListener('click', () => window.__clicks.push(b.querySelector('.Hidden').textContent)));
+</script>
+</body></html>

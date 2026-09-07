@@ -1,0 +1,1473 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Try Tinder Power Mode using fictional profiles. Keyboard shortcuts, photo navigation, focus mode and remapping powered by the actual userscript.">
+<link rel="icon" href="data:,">
+<title>Tinder Power Mode · Interactive demo</title>
+<style>
+  :root{
+    --stage:#14171d; --chrome:#1c2028; --chrome-2:#232834; --line:rgba(255,255,255,.08);
+    --ink:#e8ebf1; --muted:#8b94a7; --dim:#5d6678;
+    --app-bg:#eef0f4; --app-panel:#ffffff; --app-line:#e1e4ea; --app-ink:#1d2230; --app-muted:#7a8196;
+    --like:#21d07a; --nope:#ff4f6a; --super:#3d8bff; --rewind:#ffb020; --boost:#b55cff; --nav:#cfd6e0; --view:#8f9bb0;
+    --display:ui-sans-serif,system-ui,sans-serif;
+    --body:ui-sans-serif,system-ui,sans-serif;
+    --mono:ui-monospace,Menlo,Consolas,monospace;
+    --barh:96px;
+    /* the "cabinet": everything lives in a centred frame of at most 1240×900, so nothing drifts to the corners of a maximised window */
+    --fw:1240px; --fh:900px;
+    --fw-a:min(100vw,var(--fw)); --fh-a:min(100vh,var(--fh));
+    --mx:calc((100vw - var(--fw-a)) / 2); --my:calc((100vh - var(--fh-a)) / 2);
+    --sb:240px;    /* sidebar width */
+    --hudw:360px;  /* space kept free on the right for the script's HUD */
+  }
+  html.tpm-focus{--sb:0px}
+  @media (max-width:1000px){:root{--hudw:0px}}
+  @media (max-width:900px){:root{--sb:0px}}
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:#0f1116;color:var(--ink);font:14px/1.45 var(--body);overflow:hidden}
+  button{font:inherit;color:inherit}
+  .Hidden{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .frame{position:fixed;left:var(--mx);top:var(--my);width:var(--fw-a);height:var(--fh-a);background:var(--stage);border-radius:16px;overflow:hidden;box-shadow:0 0 0 1px var(--line),0 40px 120px rgba(0,0,0,.55)}
+
+  /* the script's own overlays, pulled in to the frame's corners (its CSS puts them at the window's) */
+  #tpm-hud.tpm-pos-bottom-right{right:calc(var(--mx) + 16px);bottom:calc(var(--my) + 16px)}
+  #tpm-hud.tpm-pos-bottom-left{left:calc(var(--mx) + 16px);bottom:calc(var(--my) + 16px)}
+  #tpm-hud.tpm-pos-top-right{right:calc(var(--mx) + 16px);top:calc(var(--my) + 72px)}
+  #tpm-hud.tpm-pos-top-left{left:calc(var(--mx) + 16px);top:calc(var(--my) + 72px)}
+  #tpm-toasts{bottom:auto!important;top:calc(var(--my) + 70px)!important}
+
+  /* ─── header ─── */
+  .bar{height:var(--barh);display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:12px 18px;background:var(--chrome);border-bottom:1px solid var(--line)}
+  .wordmark{font:700 15px/1 var(--display);letter-spacing:.22em;text-transform:uppercase;display:flex;align-items:center;gap:10px;white-space:nowrap}
+  .wordmark i{font-style:normal;font-size:16px}
+  .tag{order:3;flex-basis:100%;font:500 11px/1.5 var(--mono);color:#b4bdce;letter-spacing:.02em}
+  .tag b{color:var(--ink);font-weight:500}
+  .bar .ctl{margin-left:auto;display:flex;gap:8px;align-items:center;flex-shrink:0}
+  .btn{text-decoration:none;cursor:pointer;min-height:32px;padding:0 10px;border-radius:8px;border:1px solid var(--line);background:var(--chrome-2);color:var(--ink);font:500 12px/1 var(--mono);display:inline-flex;align-items:center;gap:7px;transition:background .15s,border-color .15s}
+  .btn:hover{background:#2b3140;border-color:rgba(255,255,255,.16)}
+  .btn:focus-visible{outline:2px solid var(--super);outline-offset:2px}
+  .btn.primary{background:var(--ink);color:var(--stage);border-color:transparent}
+  .btn.primary:hover{background:#fff}
+  #lab-toggle{display:none}
+  @media (max-width:900px){#lab-toggle{display:inline-flex}}
+  @media (max-width:760px){:root{--barh:176px}.bar{align-content:center;padding:10px;gap:8px}.bar .ctl{flex:1 1 100%;width:100%;min-width:0;margin-left:0;flex-wrap:wrap;gap:6px}.wordmark{font-size:13px}.btn{font-size:11px;padding:0 8px;min-height:34px}.tag{font-size:10px}.tag .detail{display:none}}
+
+  /* ─── stage = fake dating app ─── */
+  .stage{position:relative;height:calc(var(--fh-a) - var(--barh));display:flex;background:var(--app-bg);color:var(--app-ink);font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  aside{width:var(--sb);flex-shrink:0;background:var(--app-panel);border-right:1px solid var(--app-line);display:flex;flex-direction:column;padding:16px 14px;gap:14px;overflow:hidden}
+  .me{display:flex;align-items:center;gap:10px;font-weight:600}
+  .me .av{width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#c9cfe0,#8f9bb0)}
+  .me small{display:block;font-weight:400;color:var(--app-muted);font-size:12px}
+  .tabs2{display:flex;gap:18px;border-bottom:1px solid var(--app-line);font-size:13px;font-weight:600;color:var(--app-muted)}
+  .tabs2 span{padding:8px 0 10px}
+  .tabs2 span.on{color:var(--app-ink);box-shadow:inset 0 -2px 0 var(--app-ink)}
+  .msg{display:flex;gap:10px;align-items:center}
+  .msg .av{width:44px;height:44px;border-radius:50%;flex-shrink:0}
+  .msg .l1{height:9px;border-radius:5px;background:#dfe3ea;width:55%;margin-bottom:7px}
+  .msg .l2{height:8px;border-radius:5px;background:#eceef3;width:80%}
+  .msg > div{flex:1}
+  .lab h2{margin:8px 0;font-size:14px}.lab p{font-size:12px;color:#5a6375;line-height:1.5}.lab .keys{display:grid;grid-template-columns:1fr 1fr;gap:7px}.lab button{min-height:38px;border:1px solid #ccd1dc;border-radius:8px;background:#f5f6fa;color:#283042;cursor:pointer;font-size:12px}.lab button:hover{background:#e7ebf3}.lab button:focus-visible{outline:2px solid #3d8bff}.lab .scenario{width:100%;margin-top:8px;padding:8px}.lab label{display:block;font-size:12px;margin-top:12px}.lab input{display:block;margin-top:6px;width:100%;padding:8px;border:1px solid #ccd1dc;border-radius:6px}.lab a{color:#354c88}
+  #demo-modal{position:fixed;inset:0;z-index:2147483002;background:#0b1228bb;display:grid;place-items:center;padding:24px}#demo-modal[hidden]{display:none}#demo-modal .dialog-card{max-width:400px;background:white;color:#273149;padding:24px;border-radius:18px}#demo-modal h2{margin-top:0}#demo-modal button{padding:10px 18px;border:0;border-radius:8px;background:#263c70;color:white;cursor:pointer}
+  #mobile-lab{position:fixed;top:calc(var(--my) + var(--barh) + 8px);left:calc(var(--mx) + 12px);right:calc(var(--mx) + 12px);max-height:calc(var(--fh-a) - var(--barh) - 60px);overflow:auto;z-index:100;background:#fff;color:#293144;padding:16px;border:1px solid #ced5e0;border-radius:14px;box-shadow:0 12px 32px #14213755}#mobile-lab[hidden]{display:none}#mobile-lab h2{margin-top:0}@media(min-width:901px){#mobile-lab{display:none}}
+  /* right padding keeps the HUD's column free; bottom padding keeps the caption's row free */
+  main#main-content{flex:1;min-width:0;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:16px var(--hudw) 140px 16px;overflow:hidden}
+  @media (max-width:900px){aside{display:none}}
+
+  /* card stack region — the element Tinder sizes with --recs-card-width / --recs-card-height */
+  .region{position:relative;width:100%;max-width:380px;height:min(640px,calc(var(--fh-a) - var(--barh) - 238px));min-height:190px;flex-shrink:0}
+  .cards{position:absolute;inset:0}
+  .card{position:absolute;inset:0;border-radius:14px;overflow:hidden;background:#111;box-shadow:0 18px 50px rgba(20,25,40,.22);transition:transform .45s cubic-bezier(.2,.7,.2,1),opacity .4s ease,filter .3s;will-change:transform}
+  .card[aria-hidden="true"]{z-index:1;transform:scale(.955) translateY(12px);filter:brightness(.92)}
+  .card[aria-hidden="false"]{z-index:2}
+  .card.fly-right{transform:translate(125%,-8%) rotate(18deg)!important;opacity:0;z-index:3}
+  .card.fly-left{transform:translate(-125%,-8%) rotate(-18deg)!important;opacity:0;z-index:3}
+  .card.fly-up{transform:translateY(-130%) scale(.9)!important;opacity:0;z-index:3}
+  .card.arrive{animation:arrive .42s cubic-bezier(.2,.7,.2,1)}
+  @keyframes arrive{from{transform:translate(-60%,0) rotate(-10deg);opacity:0}to{transform:none;opacity:1}}
+  .photos{position:absolute;inset:0;bottom:84px;overflow:hidden;transition:bottom .35s cubic-bezier(.2,.7,.2,1)}
+  .card.open .photos{bottom:46%}
+  .strip{position:absolute;inset:0;display:flex;transition:transform .32s cubic-bezier(.2,.7,.2,1)}
+  .ph{flex:0 0 100%;height:100%;position:relative;background:var(--g,#333)}
+  .ph::before{content:"";position:absolute;inset:0;background:var(--blob);mix-blend-mode:screen;opacity:.9}
+  .ph::after{content:attr(data-n);position:absolute;right:14px;bottom:12px;font:700 11px/1 var(--mono);letter-spacing:.14em;color:rgba(255,255,255,.55)}
+  .ph i{position:absolute;left:50%;top:50%;transform:translate(-50%,-56%);font:700 clamp(96px,22vmin,180px)/1 var(--display);color:rgba(255,255,255,.14);letter-spacing:-.04em;user-select:none}
+  .tabs{position:absolute;left:8px;right:8px;top:8px;display:flex;gap:4px;z-index:2}
+  .tabs button{flex:1;height:14px;background:none;border:0;padding:5px 0;cursor:pointer}
+  .tabs button span{display:block;height:3px;border-radius:3px;background:rgba(255,255,255,.35)}
+  .tabs button[aria-selected="true"] span{background:#fff}
+  .tabs button:focus-visible span{outline:2px solid #fff}
+  .nav{position:absolute;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:50%;border:0;background:rgba(255,255,255,.85);color:#111;cursor:pointer;opacity:0;transition:opacity .2s;z-index:2;font-size:14px}
+  .nav.prev{left:10px}.nav.next{right:10px}
+  .photos:hover .nav:not([disabled]){opacity:1}
+  .nav:focus-visible{opacity:1;outline:2px solid #3d8bff}@media (hover:none){.nav:not([disabled]){opacity:1}}
+  .shade{position:absolute;left:0;right:0;bottom:0;height:40%;background:linear-gradient(to top,rgba(0,0,0,.65),transparent);pointer-events:none}
+  .info{position:absolute;left:0;right:0;bottom:0;height:84px;background:#0b0b0d}
+  .info .openbtn{position:absolute;inset:0;width:100%;background:none;border:0;text-align:left;color:#fff;padding:0 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer}
+  .who{display:flex;flex-direction:column;gap:4px;min-width:0}
+  .who .nm{font-size:22px;font-weight:700;letter-spacing:-.01em;display:flex;align-items:baseline;gap:8px}
+  .who .nm [itemprop="age"]{font-size:20px;font-weight:400}
+  .who .act{font-size:12px;color:#cfd6e0;display:flex;align-items:center;gap:6px}
+  .who .act::before{content:"";width:7px;height:7px;border-radius:50%;background:#2fd47b}
+  .who .meta{font-size:12px;color:#aab2c0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chev{width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+  .card.open .info{display:none}
+  .profile{display:none;position:absolute;left:0;right:0;bottom:0;height:46%;background:#fff;color:var(--app-ink);padding:18px 18px 16px;overflow:hidden}
+  .card.open .profile{display:block}
+  .profile h3{margin:0 0 2px;font-size:22px;display:flex;gap:8px;align-items:baseline}
+  .profile h3 small{font-size:18px;font-weight:400}
+  .profile .job{color:var(--app-muted);font-size:13px;margin-bottom:12px}
+  .profile p{margin:0 0 12px;font-size:14px;line-height:1.5}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chips span{font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--app-line);color:var(--app-ink)}
+  .closebtn{position:absolute;right:16px;top:-22px;width:44px;height:44px;border-radius:50%;border:0;background:#fff;box-shadow:0 6px 18px rgba(0,0,0,.25);cursor:pointer;font-size:18px;color:var(--nope)}
+
+  .gamepad{display:flex;align-items:center;justify-content:center;gap:18px;flex-shrink:0}
+  .gamepad-button-wrapper{position:relative;width:52px;height:52px}
+  .gamepad-button-wrapper.big{width:64px;height:64px}
+  .gamepad-button{width:100%;height:100%;border-radius:50%;border:2px solid var(--c);background:var(--app-panel);color:var(--c);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 6px 16px rgba(20,25,40,.12);transition:transform .12s,background .12s,color .12s}
+  .gamepad-button:hover{transform:scale(1.08)}
+  .gamepad-button:active,.gamepad-button.pressed{transform:scale(.92);background:var(--c);color:#fff}
+  .gamepad-button-wrapper .count{position:absolute;right:-4px;top:-4px;min-width:20px;height:20px;padding:0 5px;border-radius:10px;background:var(--super);color:#fff;font:700 11px/20px var(--mono);text-align:center}
+
+  .recsToolbar{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:center;gap:16px;padding:10px;font-size:11px;font-weight:600;color:var(--app-muted);letter-spacing:.04em;text-transform:uppercase;background:var(--app-panel);border-top:1px solid var(--app-line)}
+  .recsToolbar kbd{font:700 10px/1 var(--mono);border:1px solid #c9cfda;border-radius:4px;padding:2px 5px;margin-right:5px;text-transform:none}
+
+  /* ─── keycap caption (demo chrome) ─── */
+  /* sits under the card: centred on the column between the sidebar and the HUD, follows the sidebar when focus mode hides it */
+  .cap{position:fixed;left:calc(var(--mx) + var(--sb) + 16px + (var(--fw-a) - var(--sb) - 16px - var(--hudw)) / 2);transform:translateX(-50%);bottom:calc(var(--my) + 16px);z-index:20;display:flex;align-items:center;gap:16px;padding:14px 18px 14px 14px;border-radius:16px;background:rgba(20,23,29,.92);border:1px solid var(--line);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 14px 40px rgba(0,0,0,.4);width:max-content;max-width:min(620px,calc(var(--fw-a) - 32px));pointer-events:none;transition:left .35s cubic-bezier(.2,.7,.2,1);--c:var(--nav)}
+  .keycap{width:72px;height:72px;flex-shrink:0;border-radius:14px;background:linear-gradient(180deg,#2b3140,#1f242e);border:1px solid rgba(255,255,255,.12);border-bottom:5px solid #0e1015;display:flex;align-items:center;justify-content:center;font:700 30px/1 var(--mono);color:#fff;position:relative;transition:transform .08s,border-bottom-width .08s,box-shadow .12s;box-shadow:0 0 0 0 var(--c)}
+  .keycap.small{font-size:20px}
+  .keycap.down{transform:translateY(4px);border-bottom-width:1px;box-shadow:0 0 0 3px var(--c),0 0 28px var(--c)}
+  .cap .txt{display:flex;flex-direction:column;gap:4px;min-width:0}
+  .cap .step{font:500 10px/1 var(--mono);color:var(--dim);letter-spacing:.14em;text-transform:uppercase;display:flex;gap:10px;align-items:center}
+  .cap .dots{display:flex;gap:3px}
+  .cap .dots i{width:6px;height:6px;border-radius:50%;background:#2b3140}
+  .cap .dots i.on{background:var(--c)}
+  .cap .dots i.done{background:#414a5c}
+  .cap .ttl{font:700 20px/1.1 var(--display);letter-spacing:.06em;text-transform:uppercase;color:var(--c)}
+  .cap .txt p{margin:0;color:var(--muted);font-size:13px;line-height:1.45;max-width:46ch}
+  .cap .txt p b{color:var(--ink);font-weight:500}
+  .c-like{--c:var(--like)}.c-nope{--c:var(--nope)}.c-super{--c:var(--super)}.c-rewind{--c:var(--rewind)}.c-nav{--c:var(--nav)}.c-view{--c:var(--view)}
+  @media (max-width:760px){.cap{left:10px;right:10px;bottom:calc(var(--my) + 48px);transform:none;width:auto;max-width:none;padding:10px;gap:10px}.cap .ttl{font-size:15px}.cap .txt p{font-size:11px}.keycap{width:44px;height:44px;font-size:22px}#tpm-toasts{top:auto!important;bottom:calc(var(--my) + 28px)!important}.gamepad{gap:12px}.gamepad-button-wrapper{width:42px;height:42px}.gamepad-button-wrapper.big{width:50px;height:50px}main#main-content{padding:12px 16px 166px;gap:12px}#stage main#main-content .region{max-height:calc(var(--fh-a) - var(--barh) - 238px);min-height:150px}#tpm-hud.tpm-mini{max-width:calc(100vw - 32px)}.profile{padding:12px}.profile p{font-size:12px}.chips span{font-size:10px;padding:3px 6px}}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<div class="frame">
+<header class="bar">
+  <div class="wordmark"><i>🎮</i>Power Mode <span style="font-size:10px;letter-spacing:.08em;color:#aeb8cb">v1.1.2</span></div>
+  <div class="tag"><b>Interactive simulation</b> · fictional profiles · no account · <b>press → to try it</b><span class="detail"> · executes the real userscript; live Tinder and physical controllers are unverified.</span></div>
+  <div class="ctl">
+    <a class="btn primary" href="./tinder-power-mode.user.js">Install userscript</a>
+    <a class="btn" href="https://github.com/Ademord/tinder-power-mode">Source &amp; guide</a>
+    <button class="btn" id="options">Options</button>
+    <button class="btn" id="lab-toggle" aria-controls="mobile-lab" aria-expanded="false">Demo controls</button>
+    <button class="btn" id="speed" title="tour speed">1×</button>
+    <button class="btn" id="restart" title="Reset fictional deck and demo preferences">↺ Reset</button>
+    <button class="btn" id="play">▶ Play tour</button>
+  </div>
+</header>
+
+<div class="stage" id="stage">
+  <aside>
+    <div class="me"><span class="av"></span><div>Demo lab<small>Everything here is fictional</small></div></div>
+    <div class="lab">
+      <h2>Try the controls</h2>
+      <div class="keys">
+        <button data-key="ArrowLeft">← Photo</button><button data-key="ArrowRight">Photo →</button>
+        <button data-key="a">A · Nope</button><button data-key="d">D · Like</button>
+        <button data-key="w">W · Profile</button><button data-key="f">F · Focus</button>
+        <button data-key="x">X · Fit card</button><button data-key="0">0 · Stock size</button>
+        <button data-key="h">H · HUD</button><button data-key="p">P · Diagnostics</button>
+      </div>
+      <p>Use <b>1–9</b> to jump between photos. Options lets you remap keys, resize the card and toggle controller input.</p>
+      <h2>Try the guards</h2>
+      <button class="scenario" id="empty-credits" aria-pressed="false">Simulate exhausted actions</button>
+      <button class="scenario" id="show-modal">Open simulated dialog</button>
+      <label>Typing field · shortcuts pause here<input id="demo-input" placeholder="Try typing a, d or s" autocomplete="off"></label>
+      <p>No external images, fonts, analytics or runtime requests. Install/source links leave the simulation.</p>
+    </div>
+  </aside>
+
+  <main id="main-content">
+    <div class="region" role="region" aria-label="Card stack" aria-live="polite">
+      <div class="recsCardboard__cardsContainer" style="position:absolute;inset:0">
+        <div class="recsCardboard__cards cards" id="cards"></div>
+      </div>
+    </div>
+    <div class="gamepad">
+      <div class="gamepad-button-wrapper" style="--c:var(--rewind)"><button type="button" class="gamepad-button" data-act="rewind">↶<span class="Hidden">Rewind</span></button></div>
+      <div class="gamepad-button-wrapper big" style="--c:var(--nope)"><button type="button" class="gamepad-button" data-act="nope">✕<span class="Hidden">Nope</span></button></div>
+      <div class="gamepad-button-wrapper" style="--c:var(--super)"><button type="button" class="gamepad-button" data-act="superlike">★<span class="Hidden">Super Like</span></button><span class="count" role="img" aria-label="5 remaining" id="slcount">5</span></div>
+      <div class="gamepad-button-wrapper big" style="--c:var(--like)"><button type="button" class="gamepad-button" data-act="like">♥<span class="Hidden">Like</span></button></div>
+      <div class="gamepad-button-wrapper" style="--c:var(--boost)"><button type="button" class="gamepad-button" data-act="boost">⚡<span class="Hidden">Boost</span></button></div>
+    </div>
+    <div class="recsToolbar"><span><kbd>←</kbd>Nope</span><span><kbd>→</kbd>Like</span><span><kbd>↑</kbd>Open Profile</span><span><kbd>↓</kbd>Close Profile</span><span><kbd>Enter</kbd>Super Like</span><span><kbd>Space</kbd>Next Photo</span></div>
+  </main>
+</div>
+</div>
+
+<div id="demo-modal" role="dialog" aria-modal="true" aria-labelledby="dialog-title" hidden><div class="dialog-card"><h2 id="dialog-title">Simulated app dialog</h2><p>Press A, D or S: script decisions pause while this overlay is open. No purchase or match is created.</p><button id="close-modal">Close dialog</button></div></div>
+
+<section id="mobile-lab" class="lab" aria-label="Demo controls" hidden>
+  <h2>Try the controls</h2>
+  <div class="keys"><button data-key="ArrowLeft">← Previous photo</button><button data-key="ArrowRight">Next photo →</button><button data-key="a">A · Nope</button><button data-key="d">D · Like</button><button data-key="w">W · Profile</button><button data-key="f">F · Focus</button><button data-key="h">H · HUD</button><button data-key="0">0 · Stock size</button></div>
+  <button class="scenario" data-scenario="credits" aria-pressed="false">Simulate exhausted actions</button>
+  <button class="scenario" data-scenario="modal">Open simulated dialog</button>
+  <label>Typing field · shortcuts pause here<input placeholder="Try typing a, d or s" autocomplete="off"></label>
+  <p>Tap a control to use the actual script. All profiles and actions are fictional. Tap Demo controls again to close this panel.</p>
+</section>
+
+<div class="cap c-nav" id="cap" aria-live="polite">
+  <div class="keycap" id="keycap">→</div>
+  <div class="txt">
+    <div class="step"><span id="stepno">TOUR</span><span class="dots" id="dots"></span></div>
+    <div class="ttl" id="ttl">Your keyboard, more control</div>
+    <p id="txt">Try <b>← →</b> for photos, <b>A / D</b> for decisions and <b>W</b> for the profile. <b>Options</b> makes it yours. Play tour for a guided walkthrough.</p>
+  </div>
+</div>
+
+<script>
+/* Demo preferences stay on this origin; Reset explicitly clears only this demo's key. */
+(function () {
+  try {
+    const saved = JSON.parse(localStorage.getItem('tpm.settings.v1') || 'null') || { hudMode: 'full', card: { mode: 'stock', w: 800, h: 1280 } };
+    if (innerWidth < 1000 && saved.hudMode !== 'off') saved.hudMode = 'mini';
+    localStorage.setItem('tpm.settings.v1', JSON.stringify(saved));
+  } catch (e) {}
+  window.__humanKey = false;
+  window.addEventListener('keydown', function (e) { if (e.isTrusted) { window.__humanKey = true; if (window.__pauseTour) window.__pauseTour(); } }, true);
+})();
+</script>
+
+<script>
+/* ======== the real userscript, verbatim (header stripped), inlined by demo/build.js ======== */
+/*
+ * DOM hooks this script relies on (all taken from the live Tinder DOM, Sept 2026):
+ *   card stack ........ [role="region"][aria-label="Card stack"]  (carries the Maw(--recs-card-width)/H(--recs-card-height) classes)
+ *   active card ....... [data-keyboard-gamepad="true"][aria-hidden="false"]   (others are aria-hidden="true" + inert)
+ *   photo tabs ........ [role="tablist"] > button[role="tab"][aria-label="Photo N"][aria-selected]
+ *   photo prev/next ... button[aria-label="Previous Photo"], button[aria-label="Next Photo"]  (disabled at the ends)
+ *   gamepad buttons ... button.gamepad-button > ... > span.Hidden = "Rewind" | "Nope" | "Super Like" | "Like" | "Boost"
+ *   open profile ...... button[role="button"] containing span.Hidden = "Open Profile"
+ *   super likes left .. [aria-label="N remaining"][role="img"] next to the Super Like button (Boost has one too)
+ *   greyed-out ........ Rewind carries disabled="" + aria-disabled="true" when there is nothing to rewind — reported, never clicked
+ *   native keys ....... ← Nope, → Like, ↑ Open Profile, ↓ Close Profile, Enter Super Like, Space Next Photo (.recsToolbar tips)
+ *   open profile view . a different container: div.Mt(a).Expand.H(--recs-card-height)--ml.Maw(--recs-card-width)--ml > .profileContent
+ *                       (no role/aria-label!) with h1[aria-label="Name 32 years"], its own carousel + tablist, its own Nope/Super Like/Like
+ *                       gamepad, and the close control div[role="button"][data-testid="profileBackButton"] > span.Hidden "Back".
+ *   telemetry ......... Tinder runs Sentry (errors + session replay; photos carry class "sentry-block"). Every handler here is
+ *                       wrapped so nothing bubbles to window.onerror, and the overlay root is marked data-sentry-block.
+ * Press P to probe: exports only structural counts, known action availability, numeric layout,
+ * and fixed diagnostic reasons. No names, ages, URLs, arbitrary page text, or DOM nodes.
+ */
+
+(() => {
+  'use strict';
+
+  /* ═══════════════════════════════ 1. SETTINGS ═══════════════════════════════ */
+
+  const STORE_KEY = 'tpm.settings.v1';
+  const VERSION = '1.1.2';
+
+  const DEFAULTS = Object.freeze({
+    keys: {
+      nope:          ['a'],
+      like:          ['d'],
+      superlike:     ['s'],
+      rewind:        ['r'],
+      boost:         [],                          // deliberately unbound: Boost can open a purchase flow
+      prevPhoto:     ['arrowleft', 'shift+space'],
+      nextPhoto:     ['arrowright'],
+      toggleProfile: ['w'],
+      openProfile:   [],                          // ↑ stays native
+      closeProfile:  ['escape'],                  // ↓ stays native; Esc also closes our panels first
+      focus:         ['f'],
+      zoomIn:        ['+', '='],
+      zoomOut:       ['-'],
+      zoomReset:     ['0'],
+      cardFit:       ['x'],
+      cardWider:     ['shift+arrowright'],
+      cardNarrower:  ['shift+arrowleft'],
+      cardTaller:    ['shift+arrowup'],
+      cardShorter:   ['shift+arrowdown'],
+      hud:           ['h', '?'],
+      settings:      ['o'],
+      probe:         ['p'],
+    },
+    hideNativeTips: true,      // Tinder's own "← Nope → Like" bar becomes wrong once remapped
+    flash: true,               // big stamp over the card on Like / Nope / Super Like / Rewind
+    controller: true,          // Gamepad API support
+    photoRepeat: true,         // holding ←/→ keeps flipping photos
+    hudMode: 'full',           // full | mini | off
+    hudPos: 'bottom-right',    // bottom-right | bottom-left | top-right | top-left
+    decisionCooldownMs: 450,   // ignore a 2nd Like/Nope/Super Like inside this window
+    zoom: 1,                   // multiplier on top of stock/custom size, persisted
+    card: { mode: 'fit', w: 800, h: 1280 }, // fit = fill the window's column · custom = w×h px · stock = Tinder's own
+    focus: false,              // focus mode, persisted
+  });
+
+  const ACTIONS = {
+    nope:          { label: 'Nope',                 group: 'decide',  icon: '✕', color: 'nope',   decision: true },
+    like:          { label: 'Like',                 group: 'decide',  icon: '♥', color: 'like',   decision: true },
+    superlike:     { label: 'Super Like',           group: 'decide',  icon: '★', color: 'super',  decision: true },
+    rewind:        { label: 'Rewind',               group: 'decide',  icon: '↶', color: 'rewind', decision: true },
+    boost:         { label: 'Boost',                group: 'decide',  icon: '⚡', color: 'boost',  decision: true },
+    prevPhoto:     { label: 'Prev photo',           group: 'photos',  icon: '←', color: 'nav',    repeat: true },
+    nextPhoto:     { label: 'Next photo',           group: 'photos',  icon: '→', color: 'nav',    repeat: true },
+    toggleProfile: { label: 'Profile open/close',   group: 'profile', icon: '⇅', color: 'nav' },
+    openProfile:   { label: 'Open profile',         group: 'profile', icon: '↑', color: 'nav' },
+    closeProfile:  { label: 'Close profile',        group: 'profile', icon: '↓', color: 'nav' },
+    focus:         { label: 'Focus mode',           group: 'view',    icon: '◱', color: 'view' },
+    zoomIn:        { label: 'Card bigger',          group: 'view',    icon: '+', color: 'view',   repeat: true },
+    zoomOut:       { label: 'Card smaller',         group: 'view',    icon: '−', color: 'view',   repeat: true },
+    zoomReset:     { label: 'Card: Tinder’s own size', group: 'view', icon: '0', color: 'view' },
+    cardFit:       { label: 'Fit card to window',   group: 'view',    icon: '⤢', color: 'view' },
+    cardWider:     { label: 'Card wider (+32px)',   group: 'view',    icon: '→', color: 'view',   repeat: true },
+    cardNarrower:  { label: 'Card narrower',        group: 'view',    icon: '←', color: 'view',   repeat: true },
+    cardTaller:    { label: 'Card taller (+32px)',  group: 'view',    icon: '↑', color: 'view',   repeat: true },
+    cardShorter:   { label: 'Card shorter',         group: 'view',    icon: '↓', color: 'view',   repeat: true },
+    hud:           { label: 'HUD full/mini/off',    group: 'view',    icon: '▦', color: 'view' },
+    settings:      { label: 'Options',              group: 'view',    icon: '⚙', color: 'view' },
+    probe:         { label: 'Probe DOM → console',  group: 'view',    icon: '⌕', color: 'view' },
+  };
+
+  const KEY_LABELS = {
+    arrowleft: '←', arrowright: '→', arrowup: '↑', arrowdown: '↓',
+    space: 'Space', escape: 'Esc', enter: 'Enter', backspace: '⌫', delete: 'Del', tab: 'Tab',
+    shift: 'Shift', ctrl: 'Ctrl', alt: 'Alt', meta: 'Meta',
+  };
+
+  function load() {
+    let saved = {};
+    try { saved = JSON.parse(localStorage.getItem(STORE_KEY) || '{}') || {}; } catch (_) { /* ignore */ }
+    const s = Object.assign({}, DEFAULTS, saved, { keys: {} });
+    for (const a of Object.keys(DEFAULTS.keys)) {
+      const v = saved.keys && Array.isArray(saved.keys[a]) ? saved.keys[a] : DEFAULTS.keys[a];
+      s.keys[a] = v.map(String);
+    }
+    s.card = Object.assign({}, DEFAULTS.card, saved.card && typeof saved.card === 'object' ? saved.card : {});
+    if (!['fit', 'custom', 'stock'].includes(s.card.mode)) s.card.mode = DEFAULTS.card.mode;
+    return s;
+  }
+  const settings = load();
+  const save = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(settings)); } catch (_) { /* ignore */ } };
+
+  /* ═══════════════════════════════ 2. DOM HELPERS ═══════════════════════════════ */
+
+  const $  = (sel, root = document) => root.querySelector(sel);
+  const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const norm = s => (s || '').replace(/\s+/g, ' ').trim().toLowerCase().replace(/^press .+? to /, '');
+
+  // Accessible name of a control, the way Tinder writes them: aria-label, else a visually hidden span, else title, else short text.
+  function labelOf(el) {
+    const aria = el.getAttribute('aria-label');
+    if (aria) return norm(aria);
+    const hidden = el.querySelector('.Hidden');
+    if (hidden && hidden.textContent.trim()) return norm(hidden.textContent);
+    if (el.title) return norm(el.title);
+    const t = el.textContent || '';
+    return t.length <= 40 ? norm(t) : '';
+  }
+
+  function isUsable(el) {
+    if (!el || el.closest('[inert]')) return false;
+    if (el.closest('[data-keyboard-gamepad][aria-hidden="true"]')) return false;
+    return el.getClientRects().length > 0; // rendered (opacity:0 is fine — Tinder's prev/next buttons are Op(0) until hover)
+  }
+
+  const mainEl     = () => document.getElementById('main-content') || $('main') || document.body;
+  // Expanded profile view: a different container that carries the same size classes but no role/aria-label,
+  // closed by <div role="button" data-testid="profileBackButton"><span class="Hidden">Back</span>
+  const profileRoot = () => {
+    const back = $('[data-testid="profileBackButton"]');
+    return (back && (back.closest('.profileContent') || back.closest('[class~="H(--recs-card-height)--ml"]') || back.parentElement)) || $('.profileContent') || null;
+  };
+  const cardRegion = () => {                                                 // the visible one: card stack, or the open profile's container
+    const cands = [$('[role="region"][aria-label="Card stack"]'), ...$$('main [class~="H(--recs-card-height)--ml"]'), ($('.recsCardboard__cardsContainer') || {}).parentElement].filter(Boolean);
+    return cands.find(el => el.getClientRects().length > 0) || cands[0] || null;
+  };
+  const activeCard = () => $('[data-keyboard-gamepad="true"][aria-hidden="false"]')
+    || $$('[data-keyboard-gamepad="true"]').find(c => !c.hasAttribute('inert') && c.getAttribute('aria-hidden') !== 'true')
+    || null;
+  const onRecs = () => /\/app\/(recs|explore)/.test(location.pathname) || !!cardRegion();
+  // Tinder's "We've run out of potential matches" screen: no card, a pulsing <output class="beacon"> with your own photo instead
+  const emptyState = () => !activeCard() && !!$('.recsCardboard__cards .beacon, .recsCardboard__cards output[aria-busy="true"]');
+
+  function findControl(label, opts = {}) {
+    const want = norm(label);
+    const scopes = [];
+    const prof = profileRoot();          // an open profile wins: its photos, its gamepad
+    if (prof) scopes.push(prof);
+    const card = activeCard();
+    if (card) scopes.push(card);
+    scopes.push(mainEl(), document.body);
+    const seen = new Set();
+    for (const scope of scopes) {
+      if (!scope || seen.has(scope)) continue;
+      seen.add(scope);
+      for (const el of scope.querySelectorAll('button, [role="button"]')) {
+        if (labelOf(el) !== want) continue;
+        if (el.disabled && !opts.allowDisabled) continue;
+        if (!isUsable(el)) continue;
+        return el;
+      }
+    }
+    return null;
+  }
+
+  function photoTabs(scope = profileRoot() || activeCard() || mainEl()) {
+    let tabs = $$('[role="tablist"] [role="tab"]', scope).filter(isUsable);
+    if (!tabs.length) tabs = $$('.bullet, [class^="bullet"]', scope).filter(isUsable); // older profile slider fallback
+    return tabs;
+  }
+  function photoState(scope) {
+    const tabs = photoTabs(scope);
+    const index = tabs.findIndex(t =>
+      t.getAttribute('aria-selected') === 'true' || t.getAttribute('aria-current') === 'true' || /active|selected/i.test(t.className));
+    return { tabs, count: tabs.length, index };
+  }
+  // the control that closes an open profile: Tinder's "Back" button (data-testid="profileBackButton"), or any "Close Profile"
+  function closeProfileControl() {
+    const back = $('[data-testid="profileBackButton"]');
+    if (back && isUsable(back)) return back;
+    const prof = profileRoot();
+    if (prof) {
+      const el = Array.from(prof.querySelectorAll('button, [role="button"]')).find(b => ['back', 'close profile', 'close'].includes(labelOf(b)) && isUsable(b));
+      if (el) return el;
+    }
+    return findControl('close profile');
+  }
+  const profileIsOpen = () => !!closeProfileControl();
+
+  function superLikesLeft() {
+    const n = remainingFor(findControl('super like', { allowDisabled: true }));
+    return n === null ? '' : String(n);
+  }
+  // which decision buttons Tinder currently has greyed out or at zero — the HUD dims those chips
+  function decisionAvailability() {
+    const off = {};
+    for (const [action, label] of [['rewind', 'rewind'], ['superlike', 'super like'], ['boost', 'boost'], ['like', 'like'], ['nope', 'nope']]) {
+      const b = findControl(label, { allowDisabled: true });
+      off[action] = !b || isDisabled(b) || ((action === 'superlike' || action === 'boost') && remainingFor(b) === 0);
+    }
+    return off;
+  }
+
+  /* ═══════════════════════════════ 3. ACTIONS ═══════════════════════════════ */
+
+  let lastDecision = 0;
+
+  // "N remaining" badge that sits next to Super Like / Boost; null when there is none
+  function remainingFor(btn) {
+    const wrap = btn && (btn.closest('.gamepad-button-wrapper') || btn.parentElement);
+    const r = wrap && wrap.querySelector('[aria-label$="remaining"]');
+    if (!r) return null;
+    const n = parseInt(r.textContent, 10);
+    return Number.isFinite(n) ? n : null;
+  }
+  const isDisabled = btn => !!btn && (btn.disabled || btn.getAttribute('aria-disabled') === 'true');
+
+  function decide(action, label) {
+    const now = Date.now();
+    if (now - lastDecision < settings.decisionCooldownMs) return true;
+    const btn = findControl(label, { allowDisabled: true });
+    const name = ACTIONS[action].label;
+    if (!btn) { toast(`${name}: button not found (press P to probe)`); return true; }
+    if (isDisabled(btn)) { toast(`${name} isn't available right now — Tinder has the button disabled`); return true; }
+    if ((action === 'superlike' || action === 'boost') && remainingFor(btn) === 0) {
+      toast(`No ${name}s left — not clicking, that would open Tinder's purchase flow`);
+      return true;
+    }
+    lastDecision = now;
+    btn.click();
+    stamp(action);
+    return true;
+  }
+
+  function stepPhoto(dir) {
+    const btn = findControl(dir > 0 ? 'next photo' : 'previous photo', { allowDisabled: true });
+    const { tabs } = photoState();
+    if (btn && !btn.disabled) btn.click();
+    else if (tabs.length > 1) (dir > 0 ? tabs[0] : tabs[tabs.length - 1]).click(); // wrap around at the ends
+    else if (!btn) toast('No photo carousel found (press P to probe)');
+    return true;
+  }
+
+  function jumpPhoto(n) {
+    const { tabs } = photoState();
+    if (!tabs.length) { toast('No photo tabs found (press P to probe)'); return true; }
+    if (n > tabs.length) { pill(`only ${tabs.length} photo${tabs.length === 1 ? '' : 's'}`); return true; }
+    tabs[n - 1].click();
+    return true;
+  }
+
+  function openProfile() {
+    const b = findControl('open profile');
+    if (!b) { toast('"Open Profile" not found (press P to probe)'); return true; }
+    b.click();
+    return true;
+  }
+  function closeProfile() {
+    const b = closeProfileControl();
+    if (!b) { toast('Profile is not open'); return true; }
+    b.click();
+    return true;
+  }
+
+  function setFocus(on, silent) {
+    settings.focus = !!on; save();
+    document.documentElement.classList.toggle('tpm-focus', settings.focus);
+    if (!silent) toast(settings.focus ? 'Focus mode ON — press F to exit' : 'Focus mode OFF');
+    updateHUD(true);
+    return true;
+  }
+
+  /* ── Card size ──────────────────────────────────────────────────────────────────────────────
+   * Tinder's card-stack region has margin-top:auto inside a full-height column and a capped stock
+   * height, so on a tall window it sits at the bottom with a big empty band above it. The script
+   * sizes that region itself with one higher-specificity !important rule (it outranks a Stylish
+   * sheet too). Modes: fit = fill the column (default), custom = exact pixels, stock = Tinder's own;
+   * a zoom multiplier sits on top of stock/custom. The expanded-profile slider gets width/height
+   * 100% whenever an override is active (Tinder sizes it for the stock card only).            */
+  let zoomBase = null;   // Tinder's stock size, measured with the override switched off
+  let lastSize = null;   // what is currently applied — read by the HUD, so no re-measuring on every DOM tick
+  function zoomStyleEl() {
+    let s = document.getElementById('tpm-zoom');
+    if (!s) { s = document.createElement('style'); s.id = 'tpm-zoom'; (document.head || document.documentElement).appendChild(s); }
+    return s;
+  }
+  function withoutOverride(fn) {
+    const st = zoomStyleEl();
+    const prev = st.textContent;
+    st.textContent = '';
+    const region = cardRegion();
+    if (region) void region.offsetWidth; // reflow without our rule
+    try { return fn(region); } finally { st.textContent = prev; }
+  }
+  const stockOf = region => {
+    const cs = getComputedStyle(region), r = region.getBoundingClientRect();
+    const w = parseFloat(cs.maxWidth) || r.width, h = parseFloat(cs.height) || r.height;
+    return (w > 50 && h > 50) ? { w, h } : null;
+  };
+  function measureBase() { return withoutOverride(region => (region ? stockOf(region) : null)); }
+
+  // {w,h,mode} to apply, or null for "leave Tinder's own size alone"
+  function computeSize() {
+    const z = +settings.zoom || 1;
+    const c = settings.card || {};
+    if (c.mode === 'custom' && c.w > 0 && c.h > 0) return { w: Math.round(c.w * z), h: Math.round(c.h * z), mode: 'custom' };
+    if (c.mode === 'fit') {
+      const m = withoutOverride(region => {
+        if (!region) return null;
+        const col = region.parentElement || mainEl();
+        const stock = stockOf(region);
+        return { colH: col.getBoundingClientRect().height, mainW: mainEl().getBoundingClientRect().width, aspect: stock ? stock.w / stock.h : 0.5625 };
+      });
+      if (!m || m.colH < 200) return null;
+      const h = Math.floor(m.colH - 72);                                   // the gamepad hangs ~55% of its height below the region
+      const w = Math.min(Math.round(h * m.aspect), Math.floor(m.mainW - 32));
+      return { w, h, mode: 'fit' };
+    }
+    if (Math.abs(z - 1) < 0.001) return null;
+    if (!zoomBase) zoomBase = measureBase();
+    if (!zoomBase) return null;
+    return { w: Math.round(zoomBase.w * z), h: Math.round(zoomBase.h * z), mode: 'zoom' };
+  }
+  function applySize(silent) {
+    const st = zoomStyleEl();
+    const s = computeSize();
+    lastSize = s;
+    st.textContent = s
+      ? `main#main-content [role="region"][aria-label="Card stack"],main#main-content [class~="H(--recs-card-height)--ml"]{max-width:${s.w}px !important;height:${s.h}px !important;}\n.profileCard__slider,.profileCard__slider__imgShadow,.profileCard__slider__img{width:100% !important;height:100% !important;}`
+      : '';
+    if (!silent) toast(s ? `Card ${s.w}×${s.h}px${s.mode === 'fit' ? ' · fitted to the window' : s.mode === 'zoom' ? ` · zoom ${Math.round(settings.zoom * 100)}%` : ''}` : 'Card: Tinder’s own size');
+    updateHUD(true);
+  }
+  function currentSize() {
+    const s = computeSize();
+    if (s) return s;
+    const b = zoomBase || (zoomBase = measureBase());
+    return b ? { w: Math.round(b.w), h: Math.round(b.h), mode: 'stock' } : null;
+  }
+  function sizeLabel() {
+    const s = lastSize;
+    if (!s) return 'Stock size';
+    return s.mode === 'fit' ? `Fit ${s.w}×${s.h}` : s.mode === 'zoom' ? `Zoom ${Math.round(settings.zoom * 100)}%` : `${s.w}×${s.h}`;
+  }
+  function zoom(delta) {
+    if (delta === 0) { settings.zoom = 1; settings.card.mode = 'stock'; save(); applySize(); return true; }
+    if (settings.card.mode === 'fit') { const c = currentSize(); if (c) settings.card = { mode: 'custom', w: c.w, h: c.h }; } // zooming a fitted card makes it custom
+    settings.zoom = Math.min(3, Math.max(0.4, +(settings.zoom * (delta > 0 ? 1.1 : 1 / 1.1)).toFixed(3)));
+    save(); applySize(); return true;
+  }
+  function resizeCard(dw, dh) {
+    const c = currentSize();
+    if (!c) { toast('Card not on screen yet'); return true; }
+    settings.card = { mode: 'custom', w: Math.max(240, c.w + dw), h: Math.max(320, c.h + dh) }; // zoom folded into pixels
+    settings.zoom = 1;
+    save(); applySize(); return true;
+  }
+  function fitCard() { settings.card.mode = 'fit'; settings.zoom = 1; save(); applySize(); return true; }
+  function bigPreset() { settings.card = { mode: 'custom', w: 800, h: 1280 }; settings.zoom = 1; save(); applySize(); return true; }
+
+  const HUD_MODES = ['full', 'mini', 'off'];
+  function cycleHud() {
+    settings.hudMode = HUD_MODES[(HUD_MODES.indexOf(settings.hudMode) + 1) % HUD_MODES.length];
+    save(); updateHUD(true); toast(`HUD: ${settings.hudMode}`);
+    return true;
+  }
+
+  function probe() {
+    const region = cardRegion();
+    const profile = profileRoot();
+    const scope = profile || region;
+    // Do not reuse readState(): its profile name/age are appropriate only for the local HUD.
+    // Copy fixed keys and numeric values explicitly; never spread DOM state or saved settings.
+    const number = value => Number.isFinite(Number(value)) ? Math.round(Number(value)) : null;
+    const dimensions = el => {
+      if (!el) return null;
+      const rect = el.getBoundingClientRect();
+      return { width: number(rect.width), height: number(rect.height) };
+    };
+    const controls = scope ? $$('button, [role="button"]', scope) : [];
+    const main = document.getElementById('main-content');
+    // The collapsed card's decision bar is sometimes a sibling of its region.
+    if (!profile && main) {
+      for (const el of $$('.gamepad-button', main)) if (!controls.includes(el)) controls.push(el);
+    }
+    const actions = ['like', 'nope', 'super like', 'rewind', 'boost', 'next photo', 'previous photo', 'open profile', 'close profile', 'back'].map(action => {
+      const matches = controls.filter(el => labelOf(el) === action && isUsable(el));
+      return { action, found: matches.length, enabled: matches.filter(el => !isDisabled(el)).length };
+    });
+    const ps = photoState(scope || document.createElement('div'));
+    const report = {
+      version: VERSION,
+      state: { cardRegionFound: !!region, activeCardFound: !!activeCard(), profileOpen: profileIsOpen(),
+        photoCount: ps.count, photoIndex: ps.index, empty: emptyState(), onCards: onRecs(), focus: !!settings.focus },
+      layout: { region: dimensions(region), viewport: { width: number(innerWidth), height: number(innerHeight) } },
+      actions,
+      reasons: [!region && 'card-region-missing', !ps.count && 'photo-tabs-missing', profileIsOpen() && 'profile-open'].filter(Boolean),
+    };
+    const serialized = JSON.stringify(report, null, 2);
+    console.log('[Tinder Power Mode] sanitized diagnostics\n' + serialized);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(serialized).then(
+        () => toast('Sanitized diagnostics copied; also in console (F12)'),
+        () => toast('Clipboard unavailable; sanitized diagnostics are in console (F12)')
+      );
+    } else {
+      toast('Sanitized diagnostics are in console (F12); clipboard unavailable');
+    }
+    return true;
+  }
+
+  const CARD_GROUPS = new Set(['decide', 'photos', 'profile']);
+  function runAction(action, source) {
+    // HUD clicks must share the keyboard/controller guard; overlays can cover a live card.
+    if (!GLOBAL_ACTIONS.has(action) && (!onRecs() || blockingModal() || ui.settingsOpen || isTyping())) return true;
+    highlightChip(action);
+    const meta = ACTIONS[action];
+    if ((meta ? CARD_GROUPS.has(meta.group) : /^photo[1-9]$/.test(action)) && emptyState()) {
+      toast('No profiles left here — Tinder is showing its "Go Global" screen');
+      return true;
+    }
+    switch (action) {
+      case 'like':          return decide('like', 'like');
+      case 'nope':          return decide('nope', 'nope');
+      case 'superlike':     return decide('superlike', 'super like');
+      case 'rewind':        return decide('rewind', 'rewind');
+      case 'boost':         return decide('boost', 'boost');
+      case 'nextPhoto':     return stepPhoto(1);
+      case 'prevPhoto':     return stepPhoto(-1);
+      case 'toggleProfile': return profileIsOpen() ? closeProfile() : openProfile();
+      case 'openProfile':   return openProfile();
+      case 'closeProfile':  return closeProfile();
+      case 'focus':         return setFocus(!settings.focus);
+      case 'zoomIn':        return zoom(1);
+      case 'zoomOut':       return zoom(-1);
+      case 'zoomReset':     return zoom(0);
+      case 'cardFit':       return fitCard();
+      case 'cardWider':     return resizeCard(32, 0);
+      case 'cardNarrower':  return resizeCard(-32, 0);
+      case 'cardTaller':    return resizeCard(0, 32);
+      case 'cardShorter':   return resizeCard(0, -32);
+      case 'hud':           return cycleHud();
+      case 'settings':      return toggleSettings();
+      case 'probe':         return probe();
+      default:
+        if (/^photo[1-9]$/.test(action)) return jumpPhoto(+action.slice(5));
+    }
+    return true;
+  }
+
+  /* ═══════════════════════════════ 4. KEYBOARD ═══════════════════════════════ */
+
+  function keyName(e) {
+    let k = e.key;
+    if (k === ' ' || k === 'Spacebar') k = 'space';
+    k = k.toLowerCase();
+    const mods = [];
+    if (e.ctrlKey) mods.push('ctrl');
+    if (e.altKey) mods.push('alt');
+    if (e.metaKey) mods.push('meta');
+    if (e.shiftKey && (k.length > 1 || /^[a-z]$/.test(k))) mods.push('shift'); // printable symbols already reflect Shift
+    return mods.concat(k).join('+');
+  }
+  function keyLabel(k) {
+    const m = String(k).match(/^((?:ctrl\+|alt\+|meta\+|shift\+)*)(.+)$/) || [k, '', k]; // the "+" key itself must survive the split
+    const parts = m[1].split('+').filter(Boolean).concat(m[2]);
+    return parts.map(p => KEY_LABELS[p] || (p.length === 1 ? p.toUpperCase() : p[0].toUpperCase() + p.slice(1))).join('+');
+  }
+
+  function isTyping() {
+    const el = document.activeElement;
+    if (!el) return false;
+    const tag = el.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable || !!el.closest('[contenteditable=""],[contenteditable="true"]');
+  }
+
+  // A Tinder modal (e.g. "It's a Match", paywalls) rendered outside <main>: leave every key alone so Tinder/browser handle it.
+  // Counts only real overlays: aria-modal, or a role="dialog" covering ≥ 40% of the viewport (so a small banner never freezes the keys).
+  let modalToastAt = 0;
+  function blockingModal() {
+    const main = document.getElementById('main-content');
+    const hit = $$('[role="dialog"], [aria-modal="true"]').some(d => {
+      if (d.closest('#tpm-root') || (main && main.contains(d)) || !d.getClientRects().length) return false;
+      if (d.getAttribute('aria-modal') === 'true') return true;
+      const r = d.getBoundingClientRect();
+      return (r.width * r.height) >= 0.4 * innerWidth * innerHeight;
+    });
+    if (hit && Date.now() - modalToastAt > 3000) { modalToastAt = Date.now(); toast('Tinder dialog open — Power Mode keys paused'); }
+    return hit;
+  }
+
+  function actionForKey(k) {
+    for (const [action, keys] of Object.entries(settings.keys)) if (keys.includes(k)) return action;
+    if (/^[1-9]$/.test(k)) return 'photo' + k;
+    return null;
+  }
+
+  const GLOBAL_ACTIONS = new Set(['hud', 'settings', 'probe', 'focus']);
+  const swallow = new Set();
+  // Nothing from this script may reach window.onerror: Tinder's Sentry would file it as their bug, with our stack trace in it.
+  const guard = fn => function (...a) { try { return fn.apply(this, a); } catch (_) { try { console.debug('[Tinder Power Mode] Handler failed; press P for sanitized diagnostics.'); } catch (_) { /* ignore */ } } };
+
+  function onKeyDown(e) {
+    if (ui.rebinding) { e.preventDefault(); e.stopImmediatePropagation(); finishRebind(e); return; }
+    const k = keyName(e);
+    if (ui.settingsOpen) {
+      // Keep native form editing and keyboard activation inside our modal.
+      e.stopImmediatePropagation();
+      if (k === 'escape') {
+        e.preventDefault(); swallow.add(e.code || e.key); closeSettings();
+      } else if (k === 'tab' || k === 'shift+tab') {
+        e.preventDefault();
+        const controls = $$('button, input, select, textarea, [tabindex]', ui.settings).filter(el => !el.disabled && el.tabIndex >= 0);
+        const index = controls.indexOf(document.activeElement);
+        const next = e.shiftKey ? (index <= 0 ? controls.length - 1 : index - 1) : (index + 1) % controls.length;
+        if (controls[next]) controls[next].focus();
+      } else if (!isTyping()) {
+        e.preventDefault();
+        if ((k === 'enter' || k === 'space') && document.activeElement?.tagName === 'BUTTON') document.activeElement.click();
+      }
+      return;
+    }
+    if (isTyping()) return;
+    const action = actionForKey(k);
+    if (!action) return;                                          // unbound → Tinder / browser handle it natively
+    if (!GLOBAL_ACTIONS.has(action)) {
+      if (!onRecs()) return;
+      if (blockingModal()) return;
+      if (action === 'closeProfile' && k === 'escape' && !closeProfileControl()) return; // nothing to close → pass Esc through
+    }
+    e.preventDefault(); e.stopImmediatePropagation();
+    swallow.add(e.code || e.key);
+    if (e.repeat) {
+      const meta = ACTIONS[action];
+      const repeatable = /^photo[1-9]$/.test(action) ? false : !!(meta && meta.repeat) && (meta.group !== 'photos' || settings.photoRepeat);
+      if (!repeatable) return;
+    }
+    runAction(action, 'key');
+  }
+  function onKeyOther(e) {
+    const id = e.code || e.key;
+    if (ui.settingsOpen) {
+      e.stopImmediatePropagation();
+      if (e.type === 'keyup') swallow.delete(id); else if (!isTyping()) e.preventDefault();
+      return;
+    }
+    if (!swallow.has(id)) return;
+    e.stopImmediatePropagation();
+    if (e.type === 'keyup') swallow.delete(id); else e.preventDefault();
+  }
+  window.addEventListener('keydown', guard(onKeyDown), true);
+  window.addEventListener('keypress', guard(onKeyOther), true);
+  window.addEventListener('keyup', guard(onKeyOther), true);
+
+  /* ═══════════════════════════════ 5. CONTROLLER ═══════════════════════════════ */
+
+  // Standard mapping: A like · B nope · X rewind · Y super like · LB/RB photos · D-pad ←→ photos, ↑↓ profile · Back focus · Start HUD
+  const PAD_MAP = { 0: 'like', 1: 'nope', 2: 'rewind', 3: 'superlike', 4: 'prevPhoto', 5: 'nextPhoto', 8: 'focus', 9: 'hud', 12: 'openProfile', 13: 'closeProfile', 14: 'prevPhoto', 15: 'nextPhoto' };
+  let padRAF = 0;
+  const padPrev = new Map();
+  function padTick() {
+    padRAF = 0;
+    if (!settings.controller) return;
+    const pads = (navigator.getGamepads ? navigator.getGamepads() : []) || [];
+    let any = false;
+    for (const gp of pads) {
+      if (!gp) continue;
+      any = true;
+      const prev = padPrev.get(gp.index) || [];
+      gp.buttons.forEach((b, i) => {
+        const pressed = b.pressed || b.value > 0.6;
+        if (pressed && !prev[i] && PAD_MAP[i] && !ui.settingsOpen && !isTyping() && (GLOBAL_ACTIONS.has(PAD_MAP[i]) || (onRecs() && !blockingModal()))) {
+          runAction(PAD_MAP[i], 'pad');
+        }
+        prev[i] = pressed;
+      });
+      padPrev.set(gp.index, prev);
+    }
+    if (any) padRAF = requestAnimationFrame(safePadTick);
+  }
+  const safePadTick = guard(padTick);
+  function startPad() { if (!padRAF && settings.controller) padRAF = requestAnimationFrame(safePadTick); }
+  window.addEventListener('gamepadconnected', e => { toast(`🎮 Controller connected: ${(e.gamepad.id || '').split('(')[0].trim() || 'gamepad'}`); startPad(); });
+  window.addEventListener('gamepaddisconnected', () => toast('🎮 Controller disconnected'));
+
+  /* ═══════════════════════════════ 6. UI ═══════════════════════════════ */
+
+  const CSS = `
+#tpm-root{position:fixed;inset:0;pointer-events:none;z-index:2147483000;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:13px;line-height:1.3;color:#fff;
+  --tpm-like:#21d07a;--tpm-nope:#ff4f6a;--tpm-super:#3d8bff;--tpm-rewind:#ffb020;--tpm-boost:#b55cff;--tpm-nav:#cfd6e0;--tpm-view:#8f9bb0}
+#tpm-root *{box-sizing:border-box}
+#tpm-hud{position:absolute;pointer-events:auto;background:rgba(12,13,18,.88);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.08);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.45);padding:12px 14px;width:330px;user-select:none}
+#tpm-hud.tpm-off{display:none}
+#tpm-hud.tpm-mini{width:auto;padding:8px 12px}
+#tpm-hud.tpm-mini .tpm-full{display:none}
+#tpm-hud:not(.tpm-mini) .tpm-minibar{display:none}
+.tpm-pos-bottom-right{right:16px;bottom:16px}.tpm-pos-bottom-left{left:16px;bottom:16px}.tpm-pos-top-right{right:16px;top:16px}.tpm-pos-top-left{left:16px;top:16px}
+.tpm-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px}
+.tpm-logo{font-weight:800;letter-spacing:.14em;font-size:11px}
+.tpm-who{font-weight:600;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
+.tpm-photo{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.tpm-count{font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:.06em;font-size:11px;color:#dfe5ee;white-space:nowrap}
+.tpm-dots{display:flex;gap:3px;flex:1}
+.tpm-dots i{flex:1;height:4px;border-radius:3px;background:rgba(255,255,255,.16)}
+.tpm-dots i.seen{background:rgba(255,255,255,.45)}
+.tpm-dots i.on{background:#fff}
+.tpm-group{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin:4px 0}
+.tpm-gt{flex-basis:100%;font-size:9px;font-weight:800;letter-spacing:.18em;color:#7f8a9c;margin-top:4px}
+.tpm-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 7px 3px 3px;border-radius:8px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.07);font-size:10.5px;font-weight:700;letter-spacing:.03em;color:#e6ebf2;cursor:pointer;transition:transform .12s,background .12s,box-shadow .12s;--c:var(--tpm-nav)}
+.tpm-chip:hover{background:rgba(255,255,255,.1)}
+.tpm-chip kbd{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 5px;border-radius:5px;background:#1c1f27;border:1px solid #363b47;border-bottom-width:2px;font:inherit;font-size:10.5px;color:#fff}
+.tpm-chip i{font-style:normal;color:var(--c)}
+.tpm-chip.is-active{transform:scale(1.08);background:color-mix(in srgb,var(--c) 30%,transparent);box-shadow:0 0 0 1px var(--c)}
+.tpm-chip.native{opacity:.5;cursor:default}
+.tpm-chip.off{opacity:.38;filter:saturate(.2)}
+.tpm-c-like{--c:var(--tpm-like)}.tpm-c-nope{--c:var(--tpm-nope)}.tpm-c-super{--c:var(--tpm-super)}.tpm-c-rewind{--c:var(--tpm-rewind)}.tpm-c-boost{--c:var(--tpm-boost)}.tpm-c-nav{--c:var(--tpm-nav)}.tpm-c-view{--c:var(--tpm-view)}
+.tpm-foot{margin-top:8px;font-size:10px;color:#7f8a9c;display:flex;gap:10px;flex-wrap:wrap}
+.tpm-foot b{color:#c9d1dc;font-weight:700}
+.tpm-minibar{display:flex;align-items:center;gap:10px;font-weight:700;font-size:11px;white-space:nowrap}
+.tpm-minibar kbd{font:inherit;font-size:10px;padding:1px 5px;border-radius:4px;background:#1c1f27;border:1px solid #363b47}
+#tpm-stamp{position:absolute;display:none;align-items:center;justify-content:center;flex-direction:column;gap:6px}
+#tpm-stamp.show{display:flex;animation:tpm-stamp .72s ease-out forwards}
+#tpm-stamp .tpm-ic{font-size:110px;line-height:1;filter:drop-shadow(0 8px 30px rgba(0,0,0,.55))}
+#tpm-stamp .tpm-tx{font-weight:900;letter-spacing:.3em;font-size:22px;text-shadow:0 2px 12px rgba(0,0,0,.6)}
+@keyframes tpm-stamp{0%{opacity:0;transform:scale(.5) rotate(-6deg)}18%{opacity:1;transform:scale(1.05) rotate(0)}70%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.12)}}
+#tpm-pill{position:absolute;display:none;padding:5px 12px;border-radius:999px;background:rgba(10,11,15,.82);border:1px solid rgba(255,255,255,.12);font-weight:800;font-size:12px;letter-spacing:.08em;font-variant-numeric:tabular-nums;transform:translateX(-50%)}
+#tpm-pill.show{display:block;animation:tpm-pill 1.1s ease-out forwards}
+@keyframes tpm-pill{0%{opacity:0;transform:translateX(-50%) translateY(-6px)}15%{opacity:1;transform:translateX(-50%)}75%{opacity:1}100%{opacity:0}}
+#tpm-toasts{position:absolute;left:50%;bottom:28px;transform:translateX(-50%);display:flex;flex-direction:column;gap:6px;align-items:center}
+.tpm-toast{padding:8px 14px;border-radius:10px;background:rgba(12,13,18,.92);border:1px solid rgba(255,255,255,.1);font-weight:600;font-size:12px;animation:tpm-toast 2.6s ease forwards;white-space:nowrap;max-width:80vw;overflow:hidden;text-overflow:ellipsis}
+@keyframes tpm-toast{0%{opacity:0;transform:translateY(8px)}10%{opacity:1;transform:none}80%{opacity:1}100%{opacity:0}}
+#tpm-settings{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);pointer-events:auto}
+#tpm-settings.open{display:flex}
+.tpm-modal{width:min(580px,94vw);max-height:88vh;overflow:auto;background:#0f1117;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:18px 20px;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+.tpm-modal h2{margin:0 0 4px;font-size:14px;letter-spacing:.12em}
+.tpm-modal p{margin:0 0 10px;color:#8f9bb0;font-size:12px}
+.tpm-sec{font-size:9px;font-weight:800;letter-spacing:.18em;color:#7f8a9c;margin:12px 0 2px}
+.tpm-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid rgba(255,255,255,.06)}
+.tpm-row .tpm-lbl{flex:1;font-weight:600}
+.tpm-row .tpm-lbl small{display:block;color:#7f8a9c;font-weight:500;font-size:11px}
+.tpm-keys{display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;max-width:55%}
+.tpm-key{cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:6px;background:#1c1f27;border:1px solid #363b47;font-weight:700;font-size:11px}
+.tpm-key:hover{border-color:#8f9bb0}
+.tpm-key.rec{border-color:var(--tpm-super);box-shadow:0 0 0 2px rgba(61,139,255,.35)}
+.tpm-key b{color:#7f8a9c;margin-left:2px;font-weight:900}
+.tpm-key b:hover{color:var(--tpm-nope)}
+.tpm-key.add{background:transparent;color:#7f8a9c;border-style:dashed}
+.tpm-modal select,.tpm-modal input[type=number]{background:#1c1f27;color:#fff;border:1px solid #363b47;border-radius:6px;padding:3px 6px;font:inherit;font-size:12px}
+.tpm-modal input[type=number]{width:80px}
+.tpm-modal input[type=checkbox]{width:16px;height:16px;accent-color:var(--tpm-super)}
+.tpm-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+.tpm-btn{cursor:pointer;padding:7px 14px;border-radius:8px;border:1px solid #363b47;background:#1c1f27;color:#fff;font:inherit;font-weight:700;font-size:12px}
+#tpm-settings button.tpm-key{font:inherit;color:inherit}
+#tpm-settings .tpm-key-wrap{display:inline-flex;gap:3px}
+#tpm-settings .tpm-key.remove{padding:4px 6px;color:#c4cbd8}
+#tpm-settings :is(button,input,select):focus-visible{outline:2px solid #77adff;outline-offset:3px}
+#tpm-settings .tpm-modal:focus{outline:none}
+.tpm-btn.primary{background:var(--tpm-super);border-color:transparent}
+html.tpm-hide-tips .recsToolbar{display:none !important}
+html.tpm-empty main#main-content [role="region"][aria-label="Card stack"]{height:min(var(--recs-card-height,600px),600px) !important;max-width:var(--recs-card-width,375px) !important;margin-top:auto !important;margin-bottom:auto !important}
+html.tpm-focus *:has(> main#main-content) > :not(main#main-content):not([role="dialog"]):not(:has([role="dialog"])){display:none !important}
+html.tpm-focus main#main-content{border:0 !important}
+html.tpm-focus .recsToolbar{display:none !important}
+`;
+
+  const ui = { root: null, hud: null, stamp: null, pill: null, toasts: null, settings: null, settingsOpen: false, rebinding: null, lastState: '', prev: null };
+
+  function injectStyle() {
+    if (document.getElementById('tpm-style')) return;
+    const s = document.createElement('style');
+    s.id = 'tpm-style';
+    s.textContent = CSS;
+    (document.head || document.documentElement).appendChild(s);
+  }
+
+  function ensureUI() {
+    if (ui.root || !document.body) return;
+    const root = document.createElement('div');
+    root.id = 'tpm-root';
+    root.setAttribute('data-sentry-block', ''); // Sentry session replay records a blocked box here instead of the HUD's content
+    root.innerHTML = '<div id="tpm-hud"></div><div id="tpm-stamp"><div class="tpm-ic"></div><div class="tpm-tx"></div></div><div id="tpm-pill"></div><div id="tpm-toasts"></div><div id="tpm-settings"></div>';
+    document.body.appendChild(root);
+    ui.root = root;
+    ui.hud = $('#tpm-hud', root);
+    ui.stamp = $('#tpm-stamp', root);
+    ui.pill = $('#tpm-pill', root);
+    ui.toasts = $('#tpm-toasts', root);
+    ui.settings = $('#tpm-settings', root);
+    ui.hud.addEventListener('click', guard(e => {
+      const chip = e.target.closest('[data-action]');
+      if (chip && !chip.classList.contains('native')) runAction(chip.dataset.action, 'mouse');
+    }));
+    ui.settings.addEventListener('click', guard(onSettingsClick));
+    ui.settings.addEventListener('change', guard(onSettingsChange));
+  }
+
+  function toast(msg) {
+    ensureUI();
+    if (!ui.toasts) return;
+    const el = document.createElement('div');
+    el.className = 'tpm-toast';
+    el.textContent = msg;
+    ui.toasts.appendChild(el);
+    while (ui.toasts.children.length > 3) ui.toasts.firstChild.remove();
+    setTimeout(() => el.remove(), 2600);
+  }
+
+  function regionRect() {
+    const r = cardRegion();
+    return r ? r.getBoundingClientRect() : { left: 0, top: 0, width: innerWidth, height: innerHeight };
+  }
+
+  function stamp(action) {
+    if (!settings.flash) return;
+    ensureUI();
+    if (!ui.stamp) return;
+    const meta = ACTIONS[action];
+    const r = regionRect();
+    ui.stamp.style.cssText = `left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px;color:var(--tpm-${meta.color})`;
+    $('.tpm-ic', ui.stamp).textContent = meta.icon;
+    $('.tpm-tx', ui.stamp).textContent = meta.label.toUpperCase();
+    ui.stamp.classList.remove('show');
+    void ui.stamp.offsetWidth;
+    ui.stamp.classList.add('show');
+    clearTimeout(ui.stamp._t);
+    ui.stamp._t = setTimeout(() => ui.stamp.classList.remove('show'), 740);
+  }
+
+  function pill(text) {
+    ensureUI();
+    if (!ui.pill) return;
+    const r = regionRect();
+    ui.pill.style.cssText = `left:${r.left + r.width / 2}px;top:${r.top + 14}px`;
+    ui.pill.textContent = text;
+    ui.pill.classList.remove('show');
+    void ui.pill.offsetWidth;
+    ui.pill.classList.add('show');
+    clearTimeout(ui.pill._t);
+    ui.pill._t = setTimeout(() => ui.pill.classList.remove('show'), 1120);
+  }
+
+  function highlightChip(action) {
+    if (!ui.hud) return;
+    const chip = ui.hud.querySelector(`[data-action="${action}"]`);
+    if (!chip) return;
+    chip.classList.add('is-active');
+    setTimeout(() => chip.classList.remove('is-active'), 260);
+  }
+
+  function readState() {
+    const card = activeCard();
+    const prof = profileRoot();
+    const ps = photoState();
+    const q = (sel) => { const el = card && card.querySelector(sel); return el ? el.textContent.trim() : ''; };
+    let name = q('[itemprop="name"]'), age = q('[itemprop="age"]');
+    if (prof) { // the open profile's <h1 aria-label="Name 32 years"><span>Name</span><span>32</span></h1>
+      const h1 = prof.querySelector('h1');
+      const spans = h1 ? Array.from(h1.querySelectorAll('span')).map(x => x.textContent.trim()).filter(Boolean) : [];
+      if (spans.length) { name = spans[0]; age = spans[1] || ''; }
+      else if (h1) { name = h1.textContent.trim(); age = ''; }
+    }
+    return {
+      name, age,
+      count: ps.count, index: ps.index,
+      profile: profileIsOpen(), sl: superLikesLeft(), off: decisionAvailability(), empty: emptyState(),
+      size: sizeLabel(), focus: settings.focus, mode: settings.hudMode, pos: settings.hudPos, recs: onRecs(),
+    };
+  }
+
+  function chip(action, opts = {}) {
+    const meta = ACTIONS[action];
+    const keys = opts.keys || settings.keys[action] || [];
+    if (!keys.length) return '';
+    const labels = keys.slice(0, 2).map(keyLabel);
+    const kbd = labels.map(l => `<kbd>${esc(l)}</kbd>`).join('');
+    const icon = labels.includes(meta.icon) ? '' : `<i>${meta.icon}</i>`; // don't print "→ → Next photo"
+    const title = opts.off ? `${meta.label} — greyed out in Tinder right now` : meta.label;
+    return `<span class="tpm-chip tpm-c-${meta.color}${opts.off ? ' off' : ''}" data-action="${action}" title="${esc(title)}">${kbd}${icon}${esc(opts.label || meta.label)}</span>`;
+  }
+  function nativeChip(key, label, icon, color) {
+    if (actionForKey(key)) return ''; // rebound by us → not native any more
+    return `<span class="tpm-chip native tpm-c-${color}" title="Tinder's own shortcut"><kbd>${esc(keyLabel(key))}</kbd><i>${icon}</i>${esc(label)}</span>`;
+  }
+
+  let hudRAF = 0;
+  function updateHUD(force) {
+    if (force) ui.lastState = '';
+    if (hudRAF) return;
+    hudRAF = requestAnimationFrame(() => { hudRAF = 0; renderHUD(); });
+  }
+
+  function renderHUD() {
+    ensureUI();
+    if (!ui.hud) return;
+    const s = readState();
+    const key = JSON.stringify(s);
+    if (key === ui.lastState) return;
+    const p = ui.prev;
+    if (p && p.name === s.name && p.age === s.age && p.count === s.count && s.count > 0 && s.index >= 0 && s.index !== p.index) {
+      pill(`${s.index + 1} / ${s.count}`); // photo counter flash on every photo change (keys, mouse or Space)
+    }
+    ui.prev = s;
+    ui.lastState = key;
+
+    document.documentElement.classList.toggle('tpm-focus', !!(s.focus && s.recs)); // focus mode only on the card page — the sidebar comes back in chats
+    document.documentElement.classList.toggle('tpm-empty', !!s.empty);           // "out of profiles" screen: give the region Tinder's own size back
+    ui.hud.className = `tpm-pos-${s.pos} ${(s.mode === 'off' || !s.recs) ? 'tpm-off' : s.mode === 'mini' ? 'tpm-mini' : ''}`;
+    if (s.mode === 'off' || !s.recs) return;
+
+    const who = s.empty ? 'no profiles left here' : s.name ? `${esc(s.name)}${s.age ? ', ' + esc(s.age) : ''}` : '';
+    const counter = s.empty ? 'NO CARD' : s.count ? `PHOTO ${s.index + 1}/${s.count}` : 'PHOTO –';
+    const dots = s.count ? Array.from({ length: s.count }, (_, i) => `<i class="${i < s.index ? 'seen' : i === s.index ? 'on' : ''}"></i>`).join('') : '';
+    const sl = s.sl ? `<b>★ ${esc(s.sl)}</b> left` : '';
+
+    ui.hud.innerHTML = `
+      <div class="tpm-minibar">🎮 <span>${counter}</span>${who ? `<span style="opacity:.8">${who}</span>` : ''}${s.profile ? '<span style="opacity:.8">PROFILE</span>' : ''}<kbd>H</kbd></div>
+      <div class="tpm-full">
+        <div class="tpm-head"><span class="tpm-logo">🎮 POWER MODE</span><span class="tpm-who">${who}</span></div>
+        <div class="tpm-photo"><span class="tpm-count">${counter}</span><div class="tpm-dots">${dots}</div></div>
+        <div class="tpm-group"><span class="tpm-gt">DECIDE</span>${chip('nope', { off: s.off.nope })}${chip('like', { off: s.off.like })}${chip('superlike', { off: s.off.superlike })}${chip('rewind', { off: s.off.rewind })}${chip('boost', { off: s.off.boost })}${nativeChip('enter', 'Super Like', '★', 'super')}</div>
+        <div class="tpm-group"><span class="tpm-gt">PHOTOS</span>${chip('prevPhoto')}${chip('nextPhoto')}<span class="tpm-chip tpm-c-nav" title="Jump to photo"><kbd>1</kbd><kbd>9</kbd><i>#</i>Jump</span>${nativeChip('space', 'Next photo', '→', 'nav')}</div>
+        <div class="tpm-group"><span class="tpm-gt">PROFILE ${s.profile ? '· <span style="color:#fff">OPEN</span>' : '· closed'}</span>${chip('toggleProfile')}${chip('openProfile')}${chip('closeProfile')}${nativeChip('arrowup', 'Open profile', '↑', 'nav')}${nativeChip('arrowdown', 'Close profile', '↓', 'nav')}</div>
+        <div class="tpm-group"><span class="tpm-gt">VIEW · card ${esc(s.size.toLowerCase())}</span>${chip('focus', { label: s.focus ? 'Focus ON' : 'Focus' })}${chip('zoomOut', { label: 'Smaller' })}${chip('zoomIn', { label: 'Bigger' })}${chip('cardFit', { label: 'Fit' })}<span class="tpm-chip tpm-c-view" title="Shift + arrow keys: card width / height in 32px steps"><kbd>⇧</kbd><kbd>←↑↓→</kbd><i>⤢</i>Size</span>${chip('zoomReset', { label: 'Stock' })}${chip('hud', { label: 'HUD' })}${chip('settings')}${chip('probe', { label: 'Probe' })}</div>
+        <div class="tpm-foot">${sl}<span>dimmed = Tinder native key</span><span><b>1–9</b> jump to photo</span></div>
+      </div>`;
+  }
+
+  /* ── options panel ── */
+
+  function toggleSettings() { ui.settingsOpen ? closeSettings() : openSettings(); return true; }
+  function openSettings() {
+    ensureUI(); if (!ui.settings) return;
+    ui.previousFocus = document.activeElement;
+    ui.settingsOpen = true; ui.settings.classList.add('open'); renderSettings();
+  }
+  function closeSettings() {
+    ui.settingsOpen = false; ui.rebinding = null;
+    if (ui.settings?.contains(document.activeElement)) document.activeElement.blur();
+    if (ui.settings) ui.settings.classList.remove('open');
+    if (ui.previousFocus?.isConnected) ui.previousFocus.focus();
+    updateHUD(true);
+  }
+
+  function renderSettings() {
+    const focusedId = ui.settings.contains(document.activeElement) ? document.activeElement.id : '';
+    const groups = [['decide', 'DECIDE'], ['photos', 'PHOTOS'], ['profile', 'PROFILE'], ['view', 'VIEW & TOOLS']];
+    const rows = groups.map(([g, title]) => `<div class="tpm-sec">${title}</div>` + Object.entries(ACTIONS).filter(([, m]) => m.group === g).map(([a, m]) => `
+      <div class="tpm-row">
+        <div class="tpm-lbl"><span style="color:var(--tpm-${m.color})">${m.icon}</span> ${esc(m.label)}${a === 'boost' ? '<small>unbound by default — Boost can open a purchase flow</small>' : ''}${a === 'closeProfile' ? '<small>Esc closes our panels first, then the profile; passes through when nothing is open</small>' : ''}</div>
+        <div class="tpm-keys">${settings.keys[a].map((k, i) => `<span class="tpm-key-wrap"><button type="button" id="tpm-key-${a}-${i}" class="tpm-key" data-a="${a}" data-i="${i}" aria-label="Rebind ${esc(m.label)}: ${esc(keyLabel(k))}">${esc(keyLabel(k))}</button><button type="button" class="tpm-key remove" data-a="${a}" data-i="${i}" data-del="1" aria-label="Remove ${esc(keyLabel(k))} binding for ${esc(m.label)}">×</button></span>`).join('')}<button type="button" id="tpm-key-${a}-add" class="tpm-key add" data-a="${a}" data-i="-1" aria-label="Add key for ${esc(m.label)}">+ key</button></div>
+      </div>`).join('')).join('');
+
+    const fieldLabels = { cardMode: 'Card size mode', hudMode: 'HUD mode', hudPos: 'HUD position', hideNativeTips: 'Hide native shortcut bar', flash: 'Show action stamps', photoRepeat: 'Repeat photo navigation when held', controller: 'Enable controller input' };
+    const sel = (name, opts, cur = settings[name]) => `<select id="tpm-opt-${name}" aria-label="${fieldLabels[name]}" data-opt="${name}">${opts.map(o => `<option value="${o}" ${cur === o ? 'selected' : ''}>${o}</option>`).join('')}</select>`;
+    const chk = (name) => `<input type="checkbox" id="tpm-opt-${name}" aria-label="${fieldLabels[name]}" data-opt="${name}" ${settings[name] ? 'checked' : ''}>`;
+
+    ui.settings.innerHTML = `<div class="tpm-modal" role="dialog" aria-modal="true" aria-labelledby="tpm-options-title" aria-describedby="tpm-options-description" tabindex="-1">
+      <h2 id="tpm-options-title">🎮 TINDER POWER MODE — OPTIONS</h2>
+      <p id="tpm-options-description">Activate a key to rebind it, then press the new key (Esc cancels). Tab moves between controls. Outside these options, Tinder's native keys keep working unless you bind them here: <b>↑</b> open profile · <b>↓</b> close profile · <b>Space</b> next photo · <b>Enter</b> Super Like. <b>1–9</b> jump to that photo (fixed).</p>
+      ${rows}
+      <div class="tpm-sec">CARD SIZE</div>
+      <div class="tpm-row"><div class="tpm-lbl">Mode<small><b>fit</b> fills the window’s height (also <b>X</b>) · <b>custom</b> = exact pixels · <b>stock</b> = Tinder’s own size (also <b>0</b>)</small></div>${sel('cardMode', ['fit', 'custom', 'stock'], settings.card.mode)}</div>
+      <div class="tpm-row"><div class="tpm-lbl">Custom size (px)<small>Shift+←/→ width, Shift+↑/↓ height, 32px steps; + / − scale it</small></div><input type="number" id="tpm-opt-cardW" aria-label="Card width in pixels" data-opt="cardW" min="240" max="4000" step="8" value="${+settings.card.w}"> × <input type="number" id="tpm-opt-cardH" aria-label="Card height in pixels" data-opt="cardH" min="320" max="4000" step="8" value="${+settings.card.h}"></div>
+      <div class="tpm-row"><div class="tpm-lbl">Preset<small>the 50em × 80em card from the old Stylish sheet</small></div><button class="tpm-btn" data-act="big">800 × 1280</button></div>
+      <div class="tpm-sec">BEHAVIOUR</div>
+      <div class="tpm-row"><div class="tpm-lbl">Hide Tinder's own shortcut bar<small>its "← Nope · → Like" hints are wrong once the arrows are remapped</small></div>${chk('hideNativeTips')}</div>
+      <div class="tpm-row"><div class="tpm-lbl">Action stamp over the card<small>♥ LIKE / ✕ NOPE / ★ SUPER LIKE / ↶ REWIND flash</small></div>${chk('flash')}</div>
+      <div class="tpm-row"><div class="tpm-lbl">Hold ←/→ to keep flipping photos</div>${chk('photoRepeat')}</div>
+      <div class="tpm-row"><div class="tpm-lbl">Controller support<small>A like · B nope · Y super like · X rewind · LB/RB or D-pad ←→ photos · D-pad ↑↓ profile · Start HUD · Back focus</small></div>${chk('controller')}</div>
+      <div class="tpm-row"><div class="tpm-lbl">Decision cooldown (ms)<small>a second Like/Nope/Super Like inside this window is ignored</small></div><input type="number" id="tpm-opt-decisionCooldownMs" aria-label="Decision cooldown in milliseconds" data-opt="decisionCooldownMs" min="0" max="3000" step="50" value="${+settings.decisionCooldownMs}"></div>
+      <div class="tpm-row"><div class="tpm-lbl">HUD</div>${sel('hudMode', HUD_MODES)} ${sel('hudPos', ['bottom-right', 'bottom-left', 'top-right', 'top-left'])}</div>
+      <div class="tpm-btns"><button class="tpm-btn" data-act="reset">Reset defaults</button><button class="tpm-btn primary" data-act="close">Done</button></div>
+    </div>`;
+    if (ui.settingsOpen) (document.getElementById(focusedId) || ui.settings.querySelector('[role="dialog"]')).focus();
+  }
+
+  function onSettingsClick(e) {
+    if (e.target === ui.settings) { closeSettings(); return; }
+    const btn = e.target.closest('[data-act]');
+    if (btn) {
+      if (btn.dataset.act === 'reset') {
+        for (const a of Object.keys(DEFAULTS.keys)) settings.keys[a] = [...DEFAULTS.keys[a]];
+        for (const k of ['hideNativeTips', 'flash', 'controller', 'photoRepeat', 'hudMode', 'hudPos', 'decisionCooldownMs', 'zoom', 'focus']) settings[k] = DEFAULTS[k];
+        settings.card = Object.assign({}, DEFAULTS.card);
+        save(); applySettings(); applySize(true); renderSettings(); toast('Defaults restored');
+      } else if (btn.dataset.act === 'big') {
+        bigPreset(); renderSettings();
+      } else closeSettings();
+      return;
+    }
+    const key = e.target.closest('.tpm-key');
+    if (!key) return;
+    const a = key.dataset.a, i = +key.dataset.i;
+    if (e.target.dataset.del) {
+      settings.keys[a].splice(i, 1);
+      save(); renderSettings(); updateHUD(true);
+      return;
+    }
+    if (ui.rebinding && ui.rebinding.el) ui.rebinding.el.classList.remove('rec');
+    ui.rebinding = { a, i, el: key };
+    key.classList.add('rec');
+    key.textContent = 'press a key…';
+  }
+
+  function finishRebind(e) {
+    const rb = ui.rebinding;
+    ui.rebinding = null;
+    const k = keyName(e);
+    if (['shift', 'control', 'alt', 'meta', 'shift+shift'].includes(k) || k.endsWith('+control') || k.endsWith('+alt') || k.endsWith('+meta')) { ui.rebinding = rb; return; } // modifier alone: keep waiting
+    if (k === 'escape') { renderSettings(); return; }
+    if (k === 'backspace' || k === 'delete') { if (rb.i >= 0) settings.keys[rb.a].splice(rb.i, 1); }
+    else if (/^[1-9]$/.test(k)) { toast('1–9 are reserved for jumping to a photo'); }
+    else {
+      for (const other of Object.keys(settings.keys)) settings.keys[other] = settings.keys[other].filter(x => x !== k); // one key → one action
+      if (rb.i >= 0 && rb.i < settings.keys[rb.a].length) settings.keys[rb.a][rb.i] = k; else settings.keys[rb.a].push(k);
+    }
+    save(); renderSettings(); updateHUD(true);
+  }
+
+  function onSettingsChange(e) {
+    const el = e.target.closest('[data-opt]');
+    if (!el) return;
+    const name = el.dataset.opt;
+    if (name === 'cardMode') { settings.card.mode = el.value; settings.zoom = 1; save(); applySize(true); return; }
+    if (name === 'cardW' || name === 'cardH') {
+      const v = Math.max(name === 'cardW' ? 240 : 320, Math.min(4000, Math.round(+el.value || 0)));
+      settings.card[name === 'cardW' ? 'w' : 'h'] = v; settings.card.mode = 'custom'; settings.zoom = 1;
+      save(); applySize(true);
+      const modeSel = ui.settings.querySelector('[data-opt="cardMode"]'); if (modeSel) modeSel.value = 'custom';
+      return;
+    }
+    settings[name] = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Math.max(0, +el.value || 0) : el.value;
+    save(); applySettings();
+  }
+
+  function applySettings() {
+    document.documentElement.classList.toggle('tpm-hide-tips', !!settings.hideNativeTips);
+    document.documentElement.classList.toggle('tpm-focus', !!(settings.focus && onRecs()));
+    if (settings.controller) startPad();
+    updateHUD(true);
+  }
+
+  /* ═══════════════════════════════ 7. BOOT ═══════════════════════════════ */
+
+  let regionSeen = false;
+  function onDomChange() {
+    updateHUD();
+    if (!regionSeen && cardRegion()) {
+      regionSeen = true;
+      setTimeout(() => applySize(true), 600); // let Tinder's layout settle before measuring the stock size / column
+    }
+  }
+
+  let resizeT = 0;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeT);
+    resizeT = setTimeout(() => { zoomBase = null; applySize(true); }, 250); // fit follows the window; stock is re-measured
+  });
+
+  // At document-start <html> may not exist yet (Playwright init scripts, some Tampermonkey builds).
+  function whenRootExists(fn) {
+    if (document.documentElement) { fn(); return; }
+    const mo = new MutationObserver(() => { if (document.documentElement) { mo.disconnect(); fn(); } });
+    mo.observe(document, { childList: true });
+  }
+
+  function boot() {
+    injectStyle();
+    applySettings();
+    const start = () => {
+      ensureUI();
+      updateHUD(true);
+      new MutationObserver(guard(onDomChange)).observe(document.body, {
+        subtree: true, childList: true, attributes: true, attributeFilter: ['aria-selected', 'aria-hidden', 'disabled', 'inert'],
+      });
+      onDomChange();
+      if (settings.focus) setTimeout(() => toast('Focus mode ON — press F to exit'), 1200);
+    };
+    if (document.body) start(); else document.addEventListener('DOMContentLoaded', start, { once: true });
+    // SPA route changes (recs ⇄ messages) don't reload the page
+    for (const m of ['pushState', 'replaceState']) {
+      const orig = history[m];
+      history[m] = function () { const r = orig.apply(this, arguments); setTimeout(() => updateHUD(true), 60); return r; };
+    }
+    window.addEventListener('popstate', () => updateHUD(true));
+  }
+
+  whenRootExists(boot);
+})();
+
+</script>
+
+<script>
+/* ======== fake dating app + tour ======== */
+(function () {
+  'use strict';
+  const PEOPLE = [
+    { name: 'Nova', age: 27, job: 'Product designer', dist: '3 km away', bio: 'Will judge your playlist. Kindly.', tags: ['Climbing', 'Film photography', 'Ramen', 'Bad puns'], photos: 9, hue: [352, 292] },
+    { name: 'Milo', age: 31, job: 'Data engineer', dist: '6 km away', bio: 'Looking for someone to split a pizza and a bug bounty with.', tags: ['Cycling', 'Synths', 'Coffee', 'Sci-fi'], photos: 6, hue: [186, 226] },
+    { name: 'Theo', age: 29, job: 'Architect', dist: '1 km away', bio: 'Concrete enthusiast, soft person.', tags: ['Sketching', 'Vinyl', 'Hiking'], photos: 7, hue: [28, 8] },
+    { name: 'Lina', age: 26, job: 'Nurse', dist: '9 km away', bio: 'Night shifts, day naps, weekend mountains.', tags: ['Running', 'Bouldering', 'Tea', 'Dogs'], photos: 8, hue: [150, 190] },
+    { name: 'Kai', age: 33, job: 'Chef', dist: '4 km away', bio: 'I cook, you pick the movie.', tags: ['Films', 'Sailing', 'Board games'], photos: 6, hue: [262, 232] },
+    { name: 'Sora', age: 28, job: 'PhD, robotics', dist: '2 km away', bio: 'Teaching robots to be less awkward than me.', tags: ['Origami', 'Techno', 'Cats', 'Chess'], photos: 9, hue: [42, 340] },
+  ];
+  const $ = (s, r = document) => r.querySelector(s);
+  const cards = $('#cards');
+  const slcount = $('#slcount');
+  let deckPos = 0;
+  const history = [];
+
+  function photoStyle(p, i) {
+    const [h1, h2] = p.hue;
+    const t = i / Math.max(1, p.photos - 1);
+    const a = 135 + i * 37;
+    const l1 = 46 + (i % 3) * 6, l2 = 26 + (i % 2) * 8;
+    const g = `linear-gradient(${a}deg, hsl(${h1} 62% ${l1}%), hsl(${h2} 58% ${l2}%))`;
+    const bx = 20 + ((i * 53) % 60), by = 15 + ((i * 29) % 60);
+    const blob = `radial-gradient(circle at ${bx}% ${by}%, hsl(${(h1 + 40 + i * 20) % 360} 90% 70% / .55), transparent ${38 + (i % 4) * 8}%)`;
+    return `--g:${g};--blob:${blob};`;
+  }
+
+  function makeCard(p) {
+    const el = document.createElement('div');
+    el.className = 'card';
+    el.setAttribute('data-keyboard-gamepad', 'true');
+    el.setAttribute('aria-hidden', 'true');
+    el.setAttribute('inert', '');
+    const tabs = Array.from({ length: p.photos }, (_, i) => `<button type="button" role="tab" aria-label="Photo ${i + 1}" aria-selected="${i === 0}" tabindex="${i ? -1 : 0}"><span></span></button>`).join('');
+    const phs = Array.from({ length: p.photos }, (_, i) => `<div class="ph" data-n="${i + 1} / ${p.photos}" style="${photoStyle(p, i)}"><i>${p.name[0]}</i></div>`).join('');
+    el.innerHTML = `
+      <div class="photos">
+        <div class="tabs" role="tablist" aria-label="Photos">${tabs}</div>
+        <div class="strip">${phs}</div>
+        <button type="button" class="nav prev" aria-label="Previous Photo" disabled>‹</button>
+        <button type="button" class="nav next" aria-label="Next Photo">›</button>
+        <div class="shade"></div>
+      </div>
+      <div class="info"><button type="button" class="openbtn" role="button">
+        <div class="who"><span class="act">Recently Active</span><span class="nm"><span itemprop="name">${p.name}</span><span itemprop="age">${p.age}</span></span><span class="meta">${p.job} · ${p.dist}</span></div>
+        <span class="chev">↑</span><span class="Hidden">Open Profile</span>
+      </button></div>
+      <div class="profile">
+        <button type="button" class="closebtn" aria-label="Close Profile">↓</button>
+        <h3>${p.name} <small>${p.age}</small></h3>
+        <div class="job">${p.job} · ${p.dist}</div>
+        <p>${p.bio}</p>
+        <div class="chips">${p.tags.map(t => `<span>${t}</span>`).join('')}</div>
+      </div>`;
+    const tabEls = Array.from(el.querySelectorAll('[role="tab"]'));
+    const strip = $('.strip', el), prev = $('.nav.prev', el), next = $('.nav.next', el);
+    const cur = () => tabEls.findIndex(t => t.getAttribute('aria-selected') === 'true');
+    const select = i => {
+      i = Math.max(0, Math.min(tabEls.length - 1, i));
+      tabEls.forEach((t, j) => { t.setAttribute('aria-selected', String(i === j)); t.tabIndex = i === j ? 0 : -1; });
+      strip.style.transform = `translateX(-${i * 100}%)`;
+      prev.disabled = i === 0; next.disabled = i === tabEls.length - 1;
+    };
+    tabEls.forEach((t, i) => t.addEventListener('click', () => select(i)));
+    prev.addEventListener('click', () => select(cur() - 1));
+    next.addEventListener('click', () => select(cur() + 1));
+    $('.openbtn', el).addEventListener('click', () => el.classList.add('open'));
+    $('.closebtn', el).addEventListener('click', () => el.classList.remove('open'));
+    el._select = select;
+    return el;
+  }
+
+  const active = () => $('.card[aria-hidden="false"]', cards);
+  const activate = c => { c.setAttribute('aria-hidden', 'false'); c.removeAttribute('inert'); };
+  const deactivate = c => { c.setAttribute('aria-hidden', 'true'); c.setAttribute('inert', ''); };
+  const queue = []; // upcoming cards, in deck order (queue[0] is the one visible behind the live card)
+  function pushCard() { const c = makeCard(PEOPLE[deckPos++ % PEOPLE.length]); cards.prepend(c); queue.push(c); return c; }
+  function resetDeck() {
+    cards.innerHTML = ''; history.length = 0; queue.length = 0; deckPos = 0;
+    slcount.textContent = '5'; slcount.setAttribute('aria-label', '5 remaining');
+    pushCard(); pushCard(); activate(queue.shift());
+  }
+  function swipe(dir) {
+    const c = active(); if (!c) return;
+    deactivate(c);
+    c.classList.remove('open');
+    c.classList.add('fly-' + dir);
+    history.push(c);
+    while (history.length > 3) history.shift().remove();
+    activate(queue.shift());
+    pushCard();
+    setTimeout(() => { if (c.classList.contains('fly-' + dir)) c.style.visibility = 'hidden'; }, 500);
+  }
+  function rewind() {
+    const c = history.pop(); if (!c) return;
+    const a = active(); if (a) { deactivate(a); queue.unshift(a); }
+    c.style.visibility = ''; c.classList.remove('fly-left', 'fly-right', 'fly-up');
+    cards.appendChild(c); c.classList.add('arrive'); setTimeout(() => c.classList.remove('arrive'), 450);
+    activate(c);
+  }
+  function pulse(btn) { btn.classList.add('pressed'); setTimeout(() => btn.classList.remove('pressed'), 160); }
+  document.querySelectorAll('.gamepad-button').forEach(b => b.addEventListener('click', () => {
+    pulse(b);
+    const act = b.dataset.act;
+    if (act === 'like') swipe('right');
+    else if (act === 'nope') swipe('left');
+    else if (act === 'superlike') { swipe('up'); const n = Math.max(0, +slcount.textContent - 1); slcount.textContent = String(n); slcount.setAttribute('aria-label', n + ' remaining'); }
+    else if (act === 'rewind') rewind();
+  }));
+
+  // what Tinder itself does with keys the script leaves alone (↑ ↓ Space Enter). ← → are here too: they never arrive while the script runs.
+  document.addEventListener('keydown', e => {
+    if (!$('#demo-modal').hidden) { if (e.key === 'Escape') $('#close-modal').click(); return; }
+    if (e.target.closest('input, textarea, select, [contenteditable="true"]')) return;
+    const c = active(); if (!c) return;
+    switch (e.key) {
+      case 'ArrowUp': $('.openbtn', c).click(); break;
+      case 'ArrowDown': $('.closebtn', c).click(); break;
+      case ' ': e.preventDefault(); $('.nav.next', c).click(); break;
+      case 'Enter': $('[data-act="superlike"]').click(); break;
+      case 'ArrowRight': $('[data-act="like"]').click(); break;
+      case 'ArrowLeft': $('[data-act="nope"]').click(); break;
+    }
+  });
+  resetDeck();
+
+  /* ───────────── the tour ───────────── */
+  const CODES = { '+': 'Equal', '0': 'Digit0', '5': 'Digit5', ArrowRight: 'ArrowRight', ArrowLeft: 'ArrowLeft', Escape: 'Escape' };
+  const codeOf = k => CODES[k] || (k.length === 1 ? 'Key' + k.toUpperCase() : k);
+  const STEPS = [
+    { keys: ['ArrowRight', 'ArrowRight', 'ArrowRight'], cap: '→', color: 'nav', title: 'Next photo', text: 'Arrows flip photos now. Tinder’s own → would have <b>liked</b> her — the script catches the key in the capture phase, before Tinder’s handler runs.' },
+    { keys: ['5'], cap: '5', color: 'nav', title: 'Jump to photo 5', text: '<b>1–9</b> jump straight to a photo. The HUD bar and the pill on the card both track it.' },
+    { keys: ['ArrowLeft'], cap: '←', color: 'nav', title: 'Previous photo', text: 'Hold it to keep flipping; at the ends it wraps around.' },
+    { keys: ['w'], cap: 'W', color: 'nav', title: 'Open profile', text: '<b>W</b> toggles the profile. Tinder’s ↑ and ↓ keep working underneath.' },
+    { keys: ['Escape'], cap: 'Esc', color: 'nav', title: 'Close profile', text: 'Esc closes the profile — and passes through to Tinder when there is nothing to close.' },
+    { keys: ['d'], cap: 'D', color: 'like', title: 'Like', text: 'Clicks Tinder’s real Like button. The ♥ stamp confirms it landed; a 450 ms cooldown swallows double-fires.' },
+    { keys: ['ArrowRight', 'ArrowRight'], cap: '→', color: 'nav', title: 'Next photo', text: 'New card, same keys. Photo lookups are scoped to the live card — three cards sit in Tinder’s DOM with identical ids.' },
+    { keys: ['a'], cap: 'A', color: 'nope', title: 'Nope', text: 'Left hand decides, right hand browses.' },
+    { keys: ['s'], cap: 'S', color: 'super', title: 'Super Like', text: 'One fewer in the HUD’s ★ counter.' },
+    { keys: ['r'], cap: 'R', color: 'rewind', title: 'Rewind', text: 'Brings the last card back. Tinder has no native key for this.' },
+    { keys: ['f'], cap: 'F', color: 'view', title: 'Focus mode', text: 'Sidebar gone, the card takes the room. Releases itself when a match drops you into a chat.' },
+    { keys: ['+'], cap: '+', color: 'view', title: 'Resize the card', text: 'On Tinder the script sizes the card itself: <b>X</b> fits it to your window, <b>Shift+arrows</b> set exact pixels, <b>0</b> is Tinder’s own size. Persisted.' },
+    { keys: ['0'], cap: '0', color: 'view', title: 'Reset zoom', text: '' },
+    { keys: ['f'], cap: 'F', color: 'view', title: 'Exit focus mode', text: '' },
+    { keys: ['h', 'h', 'h'], cap: 'H', color: 'view', title: 'HUD: mini → off → full', text: 'Or <b>?</b>. Every key in this tour is remappable under <b>O</b>.' },
+  ];
+  const cap = $('#cap'), keycap = $('#keycap'), ttl = $('#ttl'), txt = $('#txt'), stepno = $('#stepno'), dots = $('#dots');
+  dots.innerHTML = STEPS.map(() => '<i></i>').join('');
+  const playBtn = $('#play'), speedBtn = $('#speed');
+  let speed = 1, playing = false, stepIdx = 0, timer = 0, token = 0;
+  const wait = ms => new Promise(r => { timer = setTimeout(r, ms / speed); });
+
+  function showStep(i) {
+    const s = STEPS[i];
+    cap.className = 'cap c-' + s.color;
+    keycap.textContent = s.cap; keycap.classList.toggle('small', s.cap.length > 1);
+    ttl.textContent = s.title; txt.innerHTML = s.text || '&nbsp;';
+    stepno.textContent = `step ${i + 1} / ${STEPS.length}`;
+    Array.from(dots.children).forEach((d, j) => { d.className = j < i ? 'done' : j === i ? 'on' : ''; });
+  }
+  function press(key) {
+    keycap.classList.add('down'); setTimeout(() => keycap.classList.remove('down'), 140);
+    const init = { key, code: codeOf(key), bubbles: true, cancelable: true };
+    document.body.dispatchEvent(new KeyboardEvent('keydown', init));
+    document.body.dispatchEvent(new KeyboardEvent('keyup', init));
+  }
+  async function run() {
+    const my = ++token;
+    while (playing && my === token) {
+      if (stepIdx === 0) { resetDeck(); await wait(700); if (my !== token) return; }
+      const s = STEPS[stepIdx];
+      showStep(stepIdx);
+      await wait(650); if (my !== token) return;
+      for (let k = 0; k < s.keys.length; k++) { press(s.keys[k]); await wait(k < s.keys.length - 1 ? 520 : 0); if (my !== token) return; }
+      await wait(1700); if (my !== token) return;
+      stepIdx = (stepIdx + 1) % STEPS.length;
+      if (stepIdx === 0) { await wait(900); }
+    }
+  }
+  function pause(msg) {
+    if (!playing) return;
+    playing = false; clearTimeout(timer); token++;
+    playBtn.textContent = '▶ Play tour';
+    cap.className = 'cap c-view'; keycap.textContent = '⌨'; keycap.classList.add('small');
+    ttl.textContent = 'Your keyboard'; txt.innerHTML = msg || 'The tour is paused. Press <b>▶ Play tour</b> to resume, or keep playing yourself — <b>O</b> opens the options, <b>P</b> probes the DOM.';
+    stepno.textContent = 'paused';
+  }
+  function play() { if (playing) return; playing = true; playBtn.textContent = '⏸ Pause tour'; run(); }
+  window.__pauseTour = () => pause();
+  playBtn.addEventListener('click', () => playing ? pause('Paused. ▶ resumes where it left off.') : play());
+  speedBtn.addEventListener('click', () => { speed = speed === 1 ? 1.5 : speed === 1.5 ? 2 : 1; speedBtn.textContent = speed + '×'; });
+  $('#restart').addEventListener('click', () => { try { localStorage.removeItem('tpm.settings.v1'); } catch (_) {} location.reload(); });
+  $('#options').addEventListener('click', () => {
+    pause();
+    // Exercise the real HUD action handler, even when the HUD or its key is disabled.
+    const hud = document.getElementById('tpm-hud');
+    if (!hud) return;
+    const trigger = document.createElement('span'); trigger.dataset.action = 'settings';
+    hud.appendChild(trigger); trigger.click(); trigger.remove();
+  });
+  function closeMobileLab() { $('#mobile-lab').hidden = true; $('#lab-toggle').setAttribute('aria-expanded', 'false'); }
+  $('#lab-toggle').addEventListener('click', () => { pause(); const open = $('#mobile-lab').hidden; $('#mobile-lab').hidden = !open; $('#lab-toggle').setAttribute('aria-expanded', String(open)); });
+  document.querySelectorAll('[data-key]').forEach(b => b.addEventListener('click', () => { pause(); b.blur(); press(b.dataset.key); closeMobileLab(); }));
+  document.querySelectorAll('#empty-credits, [data-scenario="credits"]').forEach(b => b.addEventListener('click', e => {
+    pause();
+    const empty = e.currentTarget.getAttribute('aria-pressed') !== 'true';
+    document.querySelectorAll('#empty-credits, [data-scenario="credits"]').forEach(button => { button.setAttribute('aria-pressed', String(empty)); button.textContent = empty ? 'Restore available actions' : 'Simulate exhausted actions'; });
+    slcount.textContent = empty ? '0' : '5'; slcount.setAttribute('aria-label', (empty ? '0' : '5') + ' remaining');
+    $('[data-act="rewind"]').disabled = empty;
+    e.currentTarget.blur(); closeMobileLab();
+  }));
+  document.querySelectorAll('#show-modal, [data-scenario="modal"]').forEach(b => b.addEventListener('click', () => { pause(); closeMobileLab(); $('#demo-modal').hidden = false; $('#close-modal').focus(); }));
+  $('#close-modal').addEventListener('click', () => { $('#demo-modal').hidden = true; (innerWidth <= 900 ? $('#lab-toggle') : $('#show-modal')).focus(); });
+  $('#stage').addEventListener('pointerdown', () => pause('You clicked in — the tour is paused. ▶ resumes it.'), true);
+  stepno.textContent = 'ready to try';
+})();
+</script>
+
+</body>
+</html>

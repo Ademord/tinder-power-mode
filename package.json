@@ -1,0 +1,14 @@
+{
+  "name": "tinder-power-mode",
+  "version": "1.1.2",
+  "private": true,
+  "description": "Keyboard controls and a local HUD for Tinder web, with a synthetic interactive demo.",
+  "license": "MIT",
+  "scripts": {
+    "build": "node demo/build.js",
+    "check:dist": "node demo/build.js --check",
+    "test": "node demo/build.js --check && node --test test/contracts.test.js"
+  },
+  "engines": { "node": ">=20" },
+  "devDependencies": { "jsdom": "24.1.3" }
+}
