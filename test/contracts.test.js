@@ -26,7 +26,7 @@ async function setup(t, options = {}) {
     url: options.url || 'https://fixture.invalid/app/recs', runScripts: 'dangerously',
     pretendToBeVisual: true, resources: new NoNetwork(), virtualConsole: vc,
     beforeParse(w) {
-      Object.defineProperty(w, 'innerWidth', { value: 1600, configurable: true });
+      Object.defineProperty(w, 'innerWidth', { value: options.width || 1600, configurable: true });
       Object.defineProperty(w, 'innerHeight', { value: 1100, configurable: true });
       w.Date.now = () => now;
       w.requestAnimationFrame = fn => { frames.set(++frame, fn); return frame; };
@@ -368,4 +368,33 @@ test('demo Options works when HUD and its keyboard binding are disabled', async 
   });
   h.click('#options');
   assert.ok(h.d.querySelector('#tpm-settings').classList.contains('open'));
+});
+
+
+for (const entry of [
+  { name: 'fresh desktop visit', width: 1600 },
+  { name: 'phone visit with saved preferences', width: 390, settings: { hudMode: 'mini' } }
+]) test('demo autoplays on ' + entry.name + ' and pause/resume cancels pending keys', async t => {
+  const h = await setup(t, {
+    html: fs.readFileSync(path.join(root, 'docs/index.html'), 'utf8'), embedded: true,
+    width: entry.width, settings: entry.settings
+  });
+  const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+  async function until(predicate) {
+    const deadline = Date.now() + 5000;
+    while (!predicate() && Date.now() < deadline) await delay(25);
+    assert.ok(predicate(), 'tour should advance an actual photo without a user starting it');
+  }
+  assert.equal(h.d.querySelector('#play').textContent, '⏸ Pause tour');
+  assert.equal(h.photo(), 0);
+  await until(() => h.photo() > 0);
+  h.click('#play');
+  const pausedPhoto = h.photo();
+  assert.equal(h.d.querySelector('#play').textContent, '▶ Play tour');
+  await delay(900);
+  assert.equal(h.photo(), pausedPhoto, 'a pending tour key must not fire after pause');
+  h.click('#play');
+  await until(() => h.photo() > 0);
+  h.click('#play');
+  assert.deepEqual(h.errors, []);
 });

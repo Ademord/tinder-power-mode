@@ -56,9 +56,9 @@ Controller input uses the browser Gamepad API with a standard button mapping: A 
 
 ## Try the simulation
 
-The [demo](https://Ademord.github.io/tinder-power-mode/) starts in manual mode. Press →, click a photo control, or use the demo lab. **Play tour** runs a guided sequence using synthetic keyboard events through the same script. Any keyboard input or click inside the demo pauses the tour.
+The [demo](https://Ademord.github.io/tinder-power-mode/) starts its guided tour automatically on entry and reload, using synthetic keyboard events through the same script. **Pause tour** stops it; **Play tour** resumes it. Press →, click a photo control, or use the demo lab to take over. Any keyboard input or click inside the demo pauses the tour.
 
-Try **Simulate exhausted actions**, **Open simulated dialog**, and the typing field to inspect the guards. **Options** opens the actual script's controls. Demo preferences persist on the demo's origin; the header's **Reset** clears only the `tpm.settings.v1` preference key there and restores the fictional deck. The demo begins at stock card size to fit its surrounding frame; the installed userscript defaults to fit mode.
+Try **Simulate exhausted actions**, **Open simulated dialog**, and the typing field to inspect the guards. **Options** opens the actual script's controls. Demo preferences persist on the demo's origin; the header's **Reset** clears only the `tpm.settings.v1` preference key there and restores the fictional deck and restarts the tour. The demo begins at stock card size to fit its surrounding frame; the installed userscript defaults to fit mode.
 
 The demo loads no remote fonts, images, analytics or runtime services. Loading the page itself requires its host unless you serve the files locally. Install and source links intentionally navigate to their targets. On a narrow screen, **Demo controls** opens a touch-friendly panel for photo, decision and guard scenarios, and the HUD initially uses mini mode unless it was switched off. The card is constrained to fit the demo frame. A keyboard is needed to try physical keyboard shortcuts; touch controls exercise the same script actions.
 

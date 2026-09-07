@@ -219,7 +219,7 @@
   <div class="txt">
     <div class="step"><span id="stepno">TOUR</span><span class="dots" id="dots"></span></div>
     <div class="ttl" id="ttl">Your keyboard, more control</div>
-    <p id="txt">Try <b>← →</b> for photos, <b>A / D</b> for decisions and <b>W</b> for the profile. <b>Options</b> makes it yours. Play tour for a guided walkthrough.</p>
+    <p id="txt">Try <b>← →</b> for photos, <b>A / D</b> for decisions and <b>W</b> for the profile. <b>Options</b> makes it yours. The guided tour starts automatically; pause it to try the controls yourself.</p>
   </div>
 </div>
 
@@ -457,6 +457,7 @@
   document.querySelectorAll('#show-modal, [data-scenario="modal"]').forEach(b => b.addEventListener('click', () => { pause(); closeMobileLab(); $('#demo-modal').hidden = false; $('#close-modal').focus(); }));
   $('#close-modal').addEventListener('click', () => { $('#demo-modal').hidden = true; (innerWidth <= 900 ? $('#lab-toggle') : $('#show-modal')).focus(); });
   $('#stage').addEventListener('pointerdown', () => pause('You clicked in — the tour is paused. ▶ resumes it.'), true);
-  stepno.textContent = 'ready to try';
+  stepno.textContent = 'starting tour';
+  play();
 })();
 </script>
